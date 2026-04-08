@@ -1,0 +1,6 @@
+/TUFF-RADICAL-KERNEL/target/
+/TUFF-RADICAL-KERNEL/qemu_output.txt
+/TUFF-RADICAL-KERNEL/qemu_serial.log
+/TUFF-RADICAL-KERNEL/qemu_serial.txt
+/logs/
+.DS_Store
