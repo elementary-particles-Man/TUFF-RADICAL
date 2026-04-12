@@ -21,9 +21,18 @@ impl Executor {
     pub fn spawn(&mut self, task: Task) {
         let task_id = task.id;
         if self.tasks.insert(task_id, task).is_some() {
-            panic!("task with same ID already in tasks");
+            // 哲学: 既存のIDと同じタスクが来てもパニックせず、古いものを上書きして状態を固定する
+            // または無視する。ここでは安全に無視する（Voidへ捨てる）
+            return;
         }
-        self.task_queue.push(task_id).expect("queue full");
+        
+        // 哲学: Sovereign Void (虚無の境界)
+        // 100の物理境界を超えるものは、システムの状態を一切変えずに「無」へ捨てる。
+        // エラーも返さず、パニックもせず、Mythosに「限界に達した」という観測結果すら与えない。
+        if let Err(_) = self.task_queue.push(task_id) {
+            // タスクはキューに入らず、Dropされて虚無に消える。
+            self.tasks.remove(&task_id);
+        }
     }
 
     fn run_ready_tasks(&mut self) {

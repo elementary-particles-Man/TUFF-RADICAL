@@ -1,0 +1,21 @@
+#!/bin/bash
+# TUFF-RADICAL Support Bundle Collector
+set -e
+
+OUT_DIR="/tmp/tuff-support-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$OUT_DIR"
+
+echo "Collecting system information..."
+uname -a > "$OUT_DIR/kernel.txt"
+lsmod > "$OUT_DIR/modules.txt"
+dmesg > "$OUT_DIR/dmesg.txt"
+journalctl -b 0 --no-pager > "$OUT_DIR/journal.txt"
+systemctl list-units --all --no-pager > "$OUT_DIR/systemd-units.txt"
+free -h > "$OUT_DIR/memory.txt"
+df -h > "$OUT_DIR/disk.txt"
+cp /etc/default/tuff-release "$OUT_DIR/tuff-release" 2>/dev/null || true
+
+tar -czf "${OUT_DIR}.tar.gz" -C "/tmp" "$(basename "$OUT_DIR")"
+rm -rf "$OUT_DIR"
+
+echo "Support bundle created: ${OUT_DIR}.tar.gz"

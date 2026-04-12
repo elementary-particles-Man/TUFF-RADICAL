@@ -1,0 +1,32 @@
+# TUFF-RADICAL Manifest: tuff-base
+# Core system packages for v1
+systemd
+systemd-sysv
+linux-image-amd64
+udev
+kmod
+iproute2
+procps
+net-tools
+bash
+sed
+grep
+gawk
+grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
+e2fsprogs
+parted
+fdisk
+ssh
+openssh-server
+ca-certificates
+curl
+wget
+zram-tools
+pciutils
+usbutils
+lshw
+htop
+tmux
+vim-tiny

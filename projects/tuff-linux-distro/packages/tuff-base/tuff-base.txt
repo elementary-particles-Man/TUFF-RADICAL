@@ -1,0 +1,42 @@
+# TUFF-RADICAL Distro: Base Package List (tuff-base)
+# Targeted for Debian 13 (Trixie)
+
+# Essential
+systemd
+systemd-sysv
+linux-image-amd64
+udev
+kmod
+iproute2
+procps
+net-tools
+bash
+sed
+grep
+gawk
+
+# Bootloader
+grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
+
+# Storage & Filesystem
+e2fsprogs
+parted
+fdisk
+
+# Basic Connectivity
+ssh
+openssh-server
+ca-certificates
+curl
+wget
+zram-tools
+
+# Support tools
+pciutils
+usbutils
+lshw
+htop
+tmux
+vim-tiny

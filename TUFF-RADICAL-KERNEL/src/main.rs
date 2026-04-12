@@ -58,12 +58,61 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
 
     memory::init_memory(&system_table);
     unsafe { paging::init_paging(); }
-    zram::init();
-
+    
+    // CPU Feature detection is required to determine the async scale topology
     let features = cpu::detect_features();
     cpu::log_features(&features);
+    
+    if !features.has_avx {
+        serial_println!("TUFF-RADICAL-KERNEL: [WARNING] AVX missing. SIMD optimization degraded.");
+    }
 
-    serial_println!("TUFF-RADICAL-KERNEL: Probing PCIe for GPU and Storage controllers...");
+    serial_println!("TUFF-RADICAL-KERNEL: Asserting absolute control over CPU (GDT/IDT)...");
+    x86_64::instructions::interrupts::disable();
+
+    gdt::init();
+    interrupts::init_idt();
+    unsafe { 
+        let mut pics = interrupts::PICS.lock();
+        pics.initialize(); 
+        pics.write_masks(0xFE, 0xFF);
+    }
+
+    let mut executor = Executor::new();
+    
+    // 1. Spawn base async initialization (PCIe, GPU, ZRAM) decoupled from the main thread
+    executor.spawn(Task::new(async_pcie_probe_and_init()));
+
+    // 2. Spawn unlinked async worker modules dynamically scaled to CPU logical threads
+    serial_println!("TUFF-RADICAL-KERNEL: Spawning {} Unlinked Asynchronous Modules...", features.logical_threads);
+    for thread_id in 0..features.logical_threads {
+        executor.spawn(Task::new(async_worker_module(thread_id)));
+    }
+
+    serial_println!("TUFF-RADICAL-KERNEL: Sovereign Executive Stable. Releasing Interrupt Seals...");
+    x86_64::instructions::interrupts::enable(); 
+    serial_println!("TUFF-RADICAL-KERNEL: OS Tick Active. Entering Async Executor loop.");
+
+    executor.run();
+}
+
+async fn async_worker_module(thread_id: u32) {
+    serial_println!("TUFF-RADICAL-ASYNC [WORKER-{}]: Online. Awaiting Vulkan/SIMD tasks.", thread_id);
+    let base_sleep = 50 + (thread_id as u64 * 15); // Unlinked heartbeat timings (無動機秘連動)
+    loop {
+        SleepFuture::new(base_sleep).await;
+        let current_tick = interrupts::TICKS.load(Ordering::Relaxed);
+        if current_tick % 1000 == 0 {
+            serial_println!("TUFF-RADICAL-ASYNC [WORKER-{}]: Heartbeat. OS Tick: {}", thread_id, current_tick);
+        }
+    }
+}
+
+async fn async_pcie_probe_and_init() {
+    serial_println!("TUFF-RADICAL-ASYNC [INIT]: Decoupled ZRAM pool initialization.");
+    zram::init();
+
+    serial_println!("TUFF-RADICAL-ASYNC [INIT]: Asynchronous PCIe probing for GPU/Storage...");
     let mut gpu_mmio_base: Option<u64> = None;
     let mut storage_device: Option<VirtioBlk> = None;
 
@@ -89,43 +138,24 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
                 }
             }
         }
+        if bus % 32 == 0 { SleepFuture::new(1).await; } // Yield control to workers
     }
-
-    serial_println!("TUFF-RADICAL-KERNEL: Asserting absolute control over CPU (GDT/IDT)...");
-    x86_64::instructions::interrupts::disable();
-
-    gdt::init();
-    interrupts::init_idt();
-    unsafe { 
-        let mut pics = interrupts::PICS.lock();
-        pics.initialize(); 
-        pics.write_masks(0xFE, 0xFF);
-    }
-
-    let mut executor = Executor::new();
-    executor.spawn(Task::new(async_cpu_fallback_task()));
 
     if let Some(base) = gpu_mmio_base {
-        serial_println!("TUFF-RADICAL-KERNEL: GPU Active at 0x{:x}. Submitting non-blocking compute.", base);
+        serial_println!("TUFF-RADICAL-ASYNC [INIT]: GPU Active at 0x{:x}. Submitting Vulkan-compatible pipeline.", base);
         let ring = GpuCommandRing::new(base);
-        executor.spawn(Task::new(async_gpu_compute_task(ring)));
+        async_gpu_compute_task(ring).await;
     }
 
     if let Some(disk) = storage_device {
-        executor.spawn(Task::new(async_install_task(disk)));
+        async_install_task(disk).await;
     }
-
-    serial_println!("TUFF-RADICAL-KERNEL: Sovereign Executive Stable. Releasing Interrupt Seals...");
-    x86_64::instructions::interrupts::enable(); 
-    serial_println!("TUFF-RADICAL-KERNEL: OS Tick Active. Entering Async Executor loop.");
-
-    executor.run();
 }
 
 async fn async_gpu_compute_task(mut ring: GpuCommandRing) {
-    serial_println!("TUFF-RADICAL-ASYNC: Initializing Vulkan-compatible Command Submission...");
+    serial_println!("TUFF-RADICAL-ASYNC [GPU]: Vulkan compute sequence isolated.");
     SleepFuture::new(10).await;
-    serial_println!("TUFF-RADICAL-ASYNC: 10 Ticks passed. Submitting compute shader to GPU.");
+    serial_println!("TUFF-RADICAL-ASYNC [GPU]: Submitting compute shader to Command Ring.");
     ring.submit_compute_command(0x70FF, 0x3000000);
 }
 
@@ -134,15 +164,6 @@ async fn async_install_task(disk: VirtioBlk) {
     SleepFuture::new(30).await; 
     disk.perform_installation();
     serial_println!("TUFF-RADICAL-ASYNC [INSTALL-TASK]: Deployment finalized. System ready.");
-}
-
-async fn async_cpu_fallback_task() {
-    serial_println!("TUFF-RADICAL-ASYNC: CPU-Sovereign mode active.");
-    loop {
-        SleepFuture::new(50).await;
-        let current_tick = interrupts::TICKS.load(Ordering::Relaxed);
-        serial_println!("TUFF-RADICAL-ASYNC [CPU-TASK]: Heartbeat. OS Tick: {}", current_tick);
-    }
 }
 
 #[panic_handler]
