@@ -54,7 +54,7 @@ impl Future for SleepFuture {
 #[entry]
 fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     unsafe { serial::COM1.lock().init(); }
-    serial_println!("--- TUFF-RADICAL-KERNEL SOVEREIGN REBIRTH (FINAL TUNE) ---");
+    serial_println!("--- TUFF-RADICAL-KERNEL T-RAD REBIRTH (FINAL TUNE) ---");
 
     memory::init_memory(&system_table);
     unsafe { paging::init_paging(); }
@@ -89,7 +89,7 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
         executor.spawn(Task::new(async_worker_module(thread_id)));
     }
 
-    serial_println!("TUFF-RADICAL-KERNEL: Sovereign Executive Stable. Releasing Interrupt Seals...");
+    serial_println!("TUFF-RADICAL-KERNEL: T-RAD Executive Stable. Releasing Interrupt Seals...");
     x86_64::instructions::interrupts::enable(); 
     serial_println!("TUFF-RADICAL-KERNEL: OS Tick Active. Entering Async Executor loop.");
 
@@ -168,7 +168,7 @@ async fn async_install_task(disk: VirtioBlk) {
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    serial_println!("\n[!!!] TUFF-RADICAL-KERNEL SOVEREIGN PANIC [!!!]");
+    serial_println!("\n[!!!] TUFF-RADICAL-KERNEL T-RAD PANIC [!!!]");
     serial_println!("Nature: {}", info);
     serial_println!("System halted. The core remains pure.");
     loop { unsafe { asm!("hlt"); } }

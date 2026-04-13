@@ -4,19 +4,19 @@ use lz4_flex::compress_prepend_size;
 use lz4_flex::decompress_size_prepended;
 use crate::serial_println;
 
-/// ベアメタル環境におけるインメモリ圧縮プール (Sovereign ZRAM)
+/// ベアメタル環境におけるインメモリ圧縮プール (T-RAD ZRAM)
 /// TUFF-RADICAL の Unique Queue (UQ) やページキャッシュを透過的に圧縮・伸張する。
-pub struct SovereignZram {
+pub struct TRadZram {
     total_uncompressed_bytes: usize,
     total_compressed_bytes: usize,
     blocks: Vec<Vec<u8>>,
 }
 
 lazy_static::lazy_static! {
-    pub static ref ZRAM_POOL: Mutex<SovereignZram> = Mutex::new(SovereignZram::new());
+    pub static ref ZRAM_POOL: Mutex<TRadZram> = Mutex::new(TRadZram::new());
 }
 
-impl SovereignZram {
+impl TRadZram {
     pub fn new() -> Self {
         Self {
             total_uncompressed_bytes: 0,
@@ -72,7 +72,7 @@ impl SovereignZram {
 }
 
 pub fn init() {
-    serial_println!("TUFF-RADICAL-COMMANDER [ZRAM-01]: Initializing Bare-metal Sovereign ZRAM Pool (LZ4-Flex)...");
+    serial_println!("TUFF-RADICAL-COMMANDER [ZRAM-01]: Initializing Bare-metal T-RAD ZRAM Pool (LZ4-Flex)...");
     
     // ZRAMの動作テスト
     let mut pool = ZRAM_POOL.lock();

@@ -16,6 +16,7 @@ PACKAGES=$(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$' | xargs | tr ' ' ',')
 # mmdebstrap 実行 (rootless/unshare mode を優先)
 mmdebstrap \
     --variant=minbase \
+    --components="main,contrib,non-free,non-free-firmware" \
     --include="$PACKAGES" \
     trixie \
     "$OUT_TAR" \

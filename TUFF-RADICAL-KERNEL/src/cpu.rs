@@ -1,4 +1,4 @@
-use core::arch::x86_64::{__cpuid, _xgetbv};
+use core::arch::x86_64::{__cpuid};
 use crate::serial_println;
 
 #[derive(Debug, Default)]
@@ -50,27 +50,27 @@ pub unsafe fn enable_simd_hardware() {
 
     // XCR0 (XFEATURE_ENABLED_MASK) configuration
     // Enable x87 (bit 0), SSE (bit 1), AVX (bit 2)
-    let mut xcr0 = 0x1 | 0x2 | 0x4;
+    let mut xcr0: u64 = 0x1 | 0x2 | 0x4;
     if features.has_avx512f {
         // Enable Opmask (bit 5), ZMM_Hi256 (bit 6), Hi16_ZMM (bit 7)
         xcr0 |= 0x20 | 0x40 | 0x80;
     }
 
+    // Write to XCR0 using xsetbv (ECX=0)
+    let eax = (xcr0 & 0xFFFFFFFF) as u32;
+    let edx = (xcr0 >> 32) as u32;
+
     core::arch::asm!(
-        "xor rcx, rcx", // ECX=0 for XCR0
-        "mov eax, {eax:e}",
-        "mov edx, {edx:e}",
+        "xor rcx, rcx",
         "xsetbv",
-        eax = in(reg) (xcr0 as u32),
-        edx = in(reg) ((xcr0 >> 32) as u32),
+        in("eax") eax,
+        in("edx") edx,
     );
 
     serial_println!("TUFF-RADICAL [CPU-01]: SIMD Hardware (XCR0={:#x}) Enabled.", xcr0);
 }
 
 pub fn log_features(f: &CpuFeatures) {
-...
-
     serial_println!("  LOGICAL THREADS: {}", f.logical_threads);
     serial_println!("  AVX:      {}", if f.has_avx { "SUPPORTED" } else { "MISSING (Sub-optimal SIMD)" });
     serial_println!("  AVX2:     {}", if f.has_avx2 { "SUPPORTED" } else { "MISSING" });

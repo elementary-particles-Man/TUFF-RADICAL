@@ -14,7 +14,7 @@ pub struct PhysicalMemoryManager {
 static mut PMM: Option<PhysicalMemoryManager> = None;
 
 pub fn init_memory(system_table: &SystemTable<Boot>) {
-    serial_println!("TUFF-RADICAL-COMMANDER [MEM-02]: Asserting Sovereignty over Memory...");
+    serial_println!("TUFF-RADICAL-COMMANDER [MEM-02]: Asserting T-RADty over Memory...");
 
     let bt = system_table.boot_services();
     let mut map_buffer = [0u8; 16384];
@@ -49,7 +49,7 @@ pub fn init_memory(system_table: &SystemTable<Boot>) {
                         pmm.next_free_phys_addr += heap_size;
                     }
                 }
-                serial_println!("=> Heap: 32MB Sovereign Heap established.");
+                serial_println!("=> Heap: 32MB T-RAD Heap established.");
             } else {
                 serial_println!("=> PMM: FATAL: No conventional memory found!");
             }

@@ -1,0 +1,34 @@
+#!/bin/bash
+# TUFF-RADICAL: T-RAD Sovereign Rescue & Deployment Script
+set -e
+
+echo "--- [LOGOS] T-RAD Sovereign Executive: System Diagnostic ---"
+
+# 1. 物理デバイスの検知
+echo "[1/3] Checking NVMe/Storage devices..."
+lsblk -p -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+
+# 2. UEFIブートエントリの確認
+echo -e "\n[2/3] Checking UEFI Boot Environment..."
+if [ -d /sys/firmware/efi/efivars ]; then
+    echo "[OK] UEFI Boot Active."
+else
+    echo "[WARN] UEFI vars not detected. T-RAD requires UEFI for native operation."
+fi
+
+# 3. インストール・デプロイ導線
+echo -e "\n[3/3] Deployment Options"
+echo "------------------------------------------------"
+echo "T-RAD OS is ready for fusion deployment."
+echo "This will install the Pure Rust Kernel and Waybroker stack."
+echo "NO NETWORK CONFIGURATION REQUIRED. ALL LOGOS."
+echo "------------------------------------------------"
+
+read -p "Begin T-RAD Physical Fusion (Installation)? [y/N]: " choice
+if [[ "$choice" =~ ^[Yy]$ ]]; then
+    echo "--- Initiating T-RAD Fusion Engine ---"
+    # Execute the fused installer directly
+    /usr/local/bin/tuff-installer install --unattended
+else
+    echo "Deployment aborted. System remains in transient state."
+fi

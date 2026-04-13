@@ -51,7 +51,7 @@ trap "umount -l $MNT_DIR/boot/efi $MNT_DIR || true" EXIT
 
 tar -xf "$ROOTFS_TAR" -C "$MNT_DIR"
 
-# Overlay の適用 (Sovereign Configs)
+# Overlay の適用 (T-RAD Configs)
 if [ -d "$OVERLAY_DIR" ]; then
     cp -rv "$OVERLAY_DIR/"* "$MNT_DIR/"
 fi

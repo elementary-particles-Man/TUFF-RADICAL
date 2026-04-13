@@ -1,4 +1,6 @@
-# TUFF-RADICAL: ZRAM Configuration
-PERCENTAGE=60
-ALGO=lz4
+# TUFF-RADICAL: ZRAM Configuration (Google ChromeOS Extreme Tuned)
+# Utilize 100% of RAM as a theoretical limit (actual usage scales dynamically)
+PERCENTAGE=100
+# Switch to zstd for the highest compression ratio (saving maximum RAM)
+ALGO=zstd
 PRIORITY=100

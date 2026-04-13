@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "--- T-RAD SOVEREIGN DEPLOYMENT ENGINE ---"
+echo "Initiating direct hardware fusion..."
+/usr/local/bin/tuff-installer install --unattended

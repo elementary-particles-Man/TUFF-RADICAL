@@ -1,0 +1,12 @@
+[Unit]
+Description=TUFF Early SSH Setup (Async)
+After=network.target
+
+[Service]
+# Changed from oneshot to simple to instantly return to systemd
+Type=simple
+ExecStart=/usr/local/bin/tuff-ssh-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

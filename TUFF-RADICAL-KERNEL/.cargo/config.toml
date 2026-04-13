@@ -1,5 +1,9 @@
 [build]
 target = "x86_64-unknown-uefi"
+rustflags = [
+    "-C", "target-cpu=x86-64-v4",
+    "-Z", "share-generics=y"
+]
 
 [unstable]
 build-std = ["core", "compiler_builtins", "alloc"]

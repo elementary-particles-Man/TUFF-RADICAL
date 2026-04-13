@@ -1,14 +1,12 @@
 # TUFF-RADICAL Manifest: tuff-recovery
 # Emergency recovery and diagnostic tools
 testdisk
-photorec
 smartmontools
 nvme-cli
 hdparm
 sdparm
 memtester
-badblocks
-ddrescue
+gddrescue
 gnupg
 openssl
 strace

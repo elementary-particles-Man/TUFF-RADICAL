@@ -1,0 +1,9 @@
+# TUFF-RADICAL: Zero-Bloat Filesystem Policy
+# Do not extract documentation, man pages, or locales into the rootfs.
+# This massively reduces VFS cache pressure and saves I/O during boot and operations.
+path-exclude=/usr/share/doc/*
+path-exclude=/usr/share/man/*
+path-exclude=/usr/share/locale/*
+path-exclude=/usr/share/info/*
+path-exclude=/usr/share/lintian/*
+path-include=/usr/share/locale/en/*

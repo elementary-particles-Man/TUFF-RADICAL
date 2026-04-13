@@ -1,0 +1,4 @@
+# TUFF-RADICAL: Minimal APT overhead
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+Acquire::Languages "none";

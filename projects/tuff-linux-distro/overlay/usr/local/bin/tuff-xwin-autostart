@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+  exit 0
+fi
+
+if [[ ! -t 0 ]]; then
+  exit 0
+fi
+
+if [[ "${XDG_VTNR:-}" != "1" ]]; then
+  exit 0
+fi
+
+if [[ "${TUFF_XWIN_PROFILE_PROMPT:-0}" == "1" ]]; then
+  exec "$HOME/.local/bin/tuff-xwin-recover" --select
+fi
+
+exec "$HOME/.local/bin/tuff-xwin-recover"

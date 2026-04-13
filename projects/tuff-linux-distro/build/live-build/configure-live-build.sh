@@ -20,8 +20,8 @@ lb config \
     --iso-publisher "TUFF-RADICAL" \
     --iso-volume "TUFF-RADICAL-LIVE" \
     --memtest none \
-    --linux-packages linux-image-amd64 \
-    --apt-recommends false \
+    --linux-packages "none" \
+    --apt-recommends true \
     --firmware-binary true \
     --firmware-chroot true
 
