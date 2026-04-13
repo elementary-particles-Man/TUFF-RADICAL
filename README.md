@@ -1,4 +1,3 @@
-# ⚠️ COMMERCIAL USE NOTICE: T-RAD / TUFF-OS requires a paid license for Large Enterprises (Max 20,000,000 JPY/year). Free for Individuals, NPOs, and SMEs. See COMMERCIAL_LICENSE.md for details.
 
 # TUFF-RADICAL
 
