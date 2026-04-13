@@ -1,3 +1,5 @@
+# ⚠️ COMMERCIAL USE NOTICE: T-RAD / TUFF-OS requires a paid license for Large Enterprises (Max 20,000,000 JPY/year). Free for Individuals, NPOs, and SMEs. See COMMERCIAL_LICENSE.md for details.
+
 # TUFF-RADICAL
 
 TUFF-RADICAL is a Pure Rust bare-metal OS experiment targeting UEFI/QEMU. The current repository centers on a standalone kernel prototype, hardware-facing subsystems, and an accompanying Codex skill used to steer low-level development work.
