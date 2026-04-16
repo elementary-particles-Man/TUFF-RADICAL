@@ -1,0 +1,25 @@
+# TUFF-RADICAL: Installer Preseed (Comprehensive Password Logic)
+# 1. Locale & Keyboard
+d-i debian-installer/locale string ja_JP.UTF-8
+d-i console-setup/ask_detect boolean false
+d-i keyboard-configuration/xkb-keymap select jp
+d-i keyboard-configuration/layoutcode string jp
+d-i keyboard-configuration/modelcode string pc106
+
+# 2. User Account (Root & Sudo)
+d-i passwd/root-login boolean true
+# Ensure user is in all standard desktop and admin groups
+d-i passwd/user-default-groups string audio cdrom video sudo netdev plugdev input
+
+
+# 3. Timezone
+d-i time/zone string Asia/Tokyo
+d-i clock-setup/utc boolean true
+
+# 4. Desktop Setup
+tasksel tasksel/first multiselect kde-desktop, japanese
+# User password definition
+d-i passwd/user-fullname string TUFF User
+d-i passwd/username string flux
+d-i passwd/user-password password 0514
+d-i passwd/user-password-again password 0514

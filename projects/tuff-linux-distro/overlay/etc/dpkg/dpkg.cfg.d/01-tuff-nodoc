@@ -7,3 +7,4 @@ path-exclude=/usr/share/locale/*
 path-exclude=/usr/share/info/*
 path-exclude=/usr/share/lintian/*
 path-include=/usr/share/locale/en/*
+path-include=/usr/share/locale/ja/*

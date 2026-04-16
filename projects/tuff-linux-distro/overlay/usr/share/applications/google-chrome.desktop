@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=Google Chrome
+GenericName=Web Browser
+Exec=/usr/bin/google-chrome-stable %U
+Terminal=false
+Icon=google-chrome
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/x-mimearchive;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true

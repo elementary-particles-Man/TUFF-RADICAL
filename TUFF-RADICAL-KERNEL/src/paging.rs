@@ -6,15 +6,11 @@ use crate::serial_println;
 const PRESENT: u64 = 1 << 0;
 const WRITABLE: u64 = 1 << 1;
 const HUGE_PAGE: u64 = 1 << 7; 
-const NO_EXECUTE: u64 = 1 << 63; // NX Bit (Execute Disable)
-const CACHE_DISABLE: u64 = 1 << 4; 
-const WRITE_THROUGH: u64 = 1 << 3; 
 
-pub const UNCACHEABLE: u64 = PRESENT | WRITABLE | CACHE_DISABLE | WRITE_THROUGH | NO_EXECUTE;
 pub const NORMAL_MEMORY: u64 = PRESENT | WRITABLE;
 
 pub unsafe fn init_paging() {
-    serial_println!("TUFF-RADICAL-COMMANDER [PAG-OPT]: Enhancing Memory Security (NX-Bit Enforce)...");
+    serial_println!("TUFF-RADICAL-COMMANDER [PAG-OPT]: Enabling NXE capability and rebuilding identity map...");
 
     // CPU の NXE (No-Execute Enable) ビットを有効化
     enable_nx_bit();
@@ -46,7 +42,7 @@ pub unsafe fn init_paging() {
     }
 
     asm!("mov cr3, {}", in(reg) pml4_phys);
-    serial_println!("=> Paging: 4GB Identity mapped with NX-Protection active.");
+    serial_println!("=> Paging: 4GB identity map active. NXE is enabled, page-level execute policy is pending finer-grained mappings.");
 }
 
 unsafe fn enable_nx_bit() {

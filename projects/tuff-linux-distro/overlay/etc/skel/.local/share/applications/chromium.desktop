@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Name=Chromium (Auto/IME)
+Exec=/usr/bin/chromium --enable-features=UseOzonePlatform --ozone-platform-hint=auto --enable-wayland-ime %U
+Terminal=false
+Icon=chromium
+Type=Application
+Categories=Network;WebBrowser;

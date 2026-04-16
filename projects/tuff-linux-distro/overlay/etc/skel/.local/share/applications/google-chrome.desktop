@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Name=Google Chrome (Auto/IME)
+Exec=/usr/bin/google-chrome-stable --enable-features=UseOzonePlatform --ozone-platform-hint=auto --enable-wayland-ime %U
+Terminal=false
+Icon=google-chrome
+Type=Application
+Categories=Network;WebBrowser;

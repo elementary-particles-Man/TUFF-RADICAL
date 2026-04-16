@@ -1,11 +1,2 @@
 # TUFF-RADICAL Global Environment
-TUFF_VULKAN_OFFLOAD=1
-ANV_QUEUE_THREAD_DISABLE=0
-
-# EXTREME USERLAND TUNING: Override glibc malloc with Microsoft's mimalloc globally.
-# This significantly reduces memory fragmentation and increases multi-threaded allocation speed across the entire OS.
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc.so.2.0
-
-# Mimalloc aggressive memory reclamation
-MIMALLOC_PURGE_DELAY=10
-MIMALLOC_ARENA_CAPACITY=33554432
+# NOTE: Avoid global LD_PRELOAD to prevent browser/sandbox crashes.

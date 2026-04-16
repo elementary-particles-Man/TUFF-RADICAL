@@ -4,8 +4,8 @@
 
 extern crate alloc;
 
-use uefi::prelude::*;
 use core::arch::asm;
+use uefi::{allocator, prelude::*};
 
 mod memory;
 mod paging;
@@ -15,6 +15,7 @@ mod cpu;
 mod serial;
 mod gdt;
 mod interrupts;
+mod apic;
 mod task;
 mod zram;
 mod virtio_blk;
@@ -32,7 +33,7 @@ struct SleepFuture {
 
 impl SleepFuture {
     fn new(ticks: u64) -> Self {
-        let current = interrupts::TICKS.load(Ordering::Relaxed);
+        let current = interrupts::current_tick();
         SleepFuture { target_tick: current + ticks }
     }
 }
@@ -41,11 +42,11 @@ impl Future for SleepFuture {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
-        let current = interrupts::TICKS.load(Ordering::Relaxed);
+        let current = interrupts::current_tick();
         if current >= self.target_tick {
             Poll::Ready(())
         } else {
-            cx.waker().wake_by_ref();
+            interrupts::register_timer_waker(self.target_tick, cx.waker());
             Poll::Pending
         }
     }
@@ -56,7 +57,15 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     unsafe { serial::COM1.lock().init(); }
     serial_println!("--- TUFF-RADICAL-KERNEL T-RAD REBIRTH (FINAL TUNE) ---");
 
-    memory::init_memory(&system_table);
+    serial_println!("TUFF-RADICAL-KERNEL: Requesting UEFI ExitBootServices handoff...");
+    let (runtime_table, mut memory_map) = system_table.exit_boot_services();
+    allocator::exit_boot_services();
+    x86_64::instructions::interrupts::disable();
+    serial_println!("TUFF-RADICAL-KERNEL: ExitBootServices complete. Firmware boot services are offline.");
+
+    memory_map.sort();
+    memory::init_memory(&memory_map);
+    memory::inspect_memory_map();
     unsafe { paging::init_paging(); }
     
     // CPU Feature detection is required to determine the async scale topology
@@ -68,15 +77,11 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     }
 
     serial_println!("TUFF-RADICAL-KERNEL: Asserting absolute control over CPU (GDT/IDT)...");
-    x86_64::instructions::interrupts::disable();
-
     gdt::init();
     interrupts::init_idt();
-    unsafe { 
-        let mut pics = interrupts::PICS.lock();
-        pics.initialize(); 
-        pics.write_masks(0xFE, 0xFF);
-    }
+    let _apic_topology = apic::init(&runtime_table);
+    interrupts::set_interrupt_timer_ready(apic::timer_routing_ready());
+    zram::init();
 
     let mut executor = Executor::new();
     
@@ -89,8 +94,12 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
         executor.spawn(Task::new(async_worker_module(thread_id)));
     }
 
-    serial_println!("TUFF-RADICAL-KERNEL: T-RAD Executive Stable. Releasing Interrupt Seals...");
-    x86_64::instructions::interrupts::enable(); 
+    if interrupts::interrupt_timer_ready() {
+        serial_println!("TUFF-RADICAL-KERNEL: APIC timer routing online. Releasing Interrupt Seals...");
+        x86_64::instructions::interrupts::enable();
+    } else {
+        serial_println!("TUFF-RADICAL-KERNEL: APIC timer routing pending. External IRQs stay masked; cooperative scheduler fallback active.");
+    }
     serial_println!("TUFF-RADICAL-KERNEL: OS Tick Active. Entering Async Executor loop.");
 
     executor.run();
@@ -102,16 +111,13 @@ async fn async_worker_module(thread_id: u32) {
     loop {
         SleepFuture::new(base_sleep).await;
         let current_tick = interrupts::TICKS.load(Ordering::Relaxed);
-        if current_tick % 1000 == 0 {
+        if current_tick.is_multiple_of(1000) {
             serial_println!("TUFF-RADICAL-ASYNC [WORKER-{}]: Heartbeat. OS Tick: {}", thread_id, current_tick);
         }
     }
 }
 
 async fn async_pcie_probe_and_init() {
-    serial_println!("TUFF-RADICAL-ASYNC [INIT]: Decoupled ZRAM pool initialization.");
-    zram::init();
-
     serial_println!("TUFF-RADICAL-ASYNC [INIT]: Asynchronous PCIe probing for GPU/Storage...");
     let mut gpu_mmio_base: Option<u64> = None;
     let mut storage_device: Option<VirtioBlk> = None;

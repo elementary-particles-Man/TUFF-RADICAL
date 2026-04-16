@@ -3,9 +3,10 @@
 set -e
 
 # Paths
-TRAD_ROOT="/media/flux/THPDOC/Develop/TUFF-RADICAL"
-XWIN_SRC="/media/flux/THPDOC/Develop/TUFF-Xwin"
-OS_SRC="/media/flux/THPDOC/Develop/TUFF-OS"
+PIPELINE_DIR="$(cd "$(dirname "$0")" && pwd)"
+TRAD_ROOT="$(cd "${PIPELINE_DIR}/../../.." && pwd)"
+XWIN_SRC="${XWIN_SRC:-$(cd "${TRAD_ROOT}/../TUFF-Xwin" 2>/dev/null && pwd || echo "")}"
+OS_SRC="${OS_SRC:-$(cd "${TRAD_ROOT}/../TUFF-OS" 2>/dev/null && pwd || echo "")}"
 OVERLAY_DIR="${TRAD_ROOT}/projects/tuff-linux-distro/overlay"
 BIN_DIR="${OVERLAY_DIR}/usr/local/bin"
 BOOT_DIR="${OVERLAY_DIR}/boot"

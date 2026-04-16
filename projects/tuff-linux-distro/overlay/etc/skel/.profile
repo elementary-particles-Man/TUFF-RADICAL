@@ -1,15 +1,21 @@
-# TUFF-RADICAL: skel .profile
-# Automatically launch TUFF-Xwin (Waybroker) upon login on TTY1
+# ~/.profile: executed by the command interpreter for login shells.
+# This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login
+# exists.
 
-if [ "$(tty)" = "/dev/tty1" ]; then
-    echo "--- T-RAD Sovereign Executive: Initiating TUFF-Xwin ---"
-    
-    # Auto-recover or start the default host-wayland profile
-    if command -v tuff-xwin-autostart >/dev/null 2>&1; then
-        exec tuff-xwin-autostart
-    else
-        # Fallback if autostart script is not available
-        export TUFF_XWIN_PREFIX=/usr/local
-        exec tuff-xwin-start host-wayland
-    fi
+# set PATH so it includes user's private bin if it exists
+if [ -d "$HOME/bin" ] ; then
+    PATH="$HOME/bin:$PATH"
 fi
+
+if [ -d "$HOME/.local/bin" ] ; then
+    PATH="$HOME/.local/bin:$PATH"
+fi
+
+# FCITX5 Japanese Input Environment (Unset LC_ALL as per HANDOFF.md)
+export XMODIFIERS=@im=fcitx
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export SDL_IM_MODULE=fcitx
+export LANG=ja_JP.UTF-8
+export LANGUAGE=ja_JP:ja
+unset LC_ALL

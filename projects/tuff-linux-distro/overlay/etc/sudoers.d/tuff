@@ -1,0 +1,2 @@
+# TUFF-RADICAL: Allow users in sudo group to run any command without password
+%sudo ALL=(ALL:ALL) NOPASSWD: ALL

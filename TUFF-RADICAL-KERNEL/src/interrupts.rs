@@ -1,19 +1,18 @@
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use alloc::vec::Vec;
+use core::task::Waker;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 use crate::gdt;
 use lazy_static::lazy_static;
-use pic8259::ChainedPics;
 use spin::Mutex;
 
-pub const PIC_1_OFFSET: u8 = 32;
-pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
-
-pub static PICS: Mutex<ChainedPics> =
-    Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+pub const TIMER_VECTOR: u8 = 32;
+static INTERRUPT_TIMER_READY: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
-    Timer = PIC_1_OFFSET,
+    Timer = TIMER_VECTOR,
 }
 
 impl InterruptIndex {
@@ -36,7 +35,6 @@ lazy_static! {
         }
         idt.page_fault.set_handler_fn(page_fault_handler);
         idt.general_protection_fault.set_handler_fn(general_protection_handler);
-
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
 
         for i in 32..256 {
@@ -46,10 +44,81 @@ lazy_static! {
 
         idt
     };
+    static ref TIMER_WAITERS: Mutex<Vec<TimerWaiter>> = Mutex::new(Vec::new());
+}
+
+struct TimerWaiter {
+    target_tick: u64,
+    waker: Waker,
 }
 
 pub fn init_idt() {
     IDT.load();
+}
+
+pub fn current_tick() -> u64 {
+    TICKS.load(Ordering::Relaxed)
+}
+
+pub fn advance_cooperative_tick() -> u64 {
+    let tick = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
+    wake_due_timer_waiters();
+    tick
+}
+
+pub fn interrupt_timer_ready() -> bool {
+    INTERRUPT_TIMER_READY.load(Ordering::SeqCst)
+}
+
+pub fn set_interrupt_timer_ready(ready: bool) {
+    INTERRUPT_TIMER_READY.store(ready, Ordering::SeqCst);
+}
+
+pub fn register_timer_waker(target_tick: u64, waker: &Waker) {
+    if current_tick() >= target_tick {
+        waker.wake_by_ref();
+        return;
+    }
+
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut waiters = TIMER_WAITERS.lock();
+        if let Some(existing) = waiters
+            .iter_mut()
+            .find(|entry| entry.waker.will_wake(waker))
+        {
+            existing.target_tick = existing.target_tick.min(target_tick);
+            existing.waker = waker.clone();
+            return;
+        }
+
+        waiters.push(TimerWaiter {
+            target_tick,
+            waker: waker.clone(),
+        });
+    });
+}
+
+pub fn wake_due_timer_waiters() {
+    let current = current_tick();
+    let ready_wakers = x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut waiters = TIMER_WAITERS.lock();
+        let mut ready = Vec::new();
+        let mut index = 0;
+
+        while index < waiters.len() {
+            if waiters[index].target_tick <= current {
+                ready.push(waiters.swap_remove(index).waker);
+            } else {
+                index += 1;
+            }
+        }
+
+        ready
+    });
+
+    for waker in ready_wakers {
+        waker.wake();
+    }
 }
 
 extern "x86-interrupt" fn breakpoint_handler(_stack_frame: InterruptStackFrame) {
@@ -74,21 +143,14 @@ extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame,
     loop { unsafe { core::arch::asm!("hlt"); } }
 }
 
-use core::sync::atomic::{AtomicU64, Ordering};
-
 pub static TICKS: AtomicU64 = AtomicU64::new(0);
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    unsafe {
-        PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-    }
+    wake_due_timer_waiters();
+    crate::apic::end_of_interrupt();
 }
 
 extern "x86-interrupt" fn generic_ignore_handler(_stack_frame: InterruptStackFrame) {
-    unsafe {
-        let mut pics = PICS.lock();
-        pics.notify_end_of_interrupt(PIC_2_OFFSET); // Slave
-        pics.notify_end_of_interrupt(PIC_1_OFFSET); // Master 
-    }
+    crate::apic::end_of_interrupt();
 }

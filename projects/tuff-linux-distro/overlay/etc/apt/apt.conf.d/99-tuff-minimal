@@ -1,4 +1,4 @@
-# TUFF-RADICAL: Minimal APT overhead
-APT::Install-Recommends "false";
+# TUFF-RADICAL: Balanced APT overhead (Ensures desktop functionality)
+APT::Install-Recommends "true";
 APT::Install-Suggests "false";
-Acquire::Languages "none";
+Acquire::Languages "ja,en";

@@ -1,0 +1,19 @@
+#!/bin/bash
+# TUFF-RADICAL: Forced Kernel Copy Hook
+set -e
+
+echo "--- TUFF-RADICAL: Forcing kernel copy to binary/live ---"
+mkdir -p binary/live
+
+# Get the latest kernel and initrd from chroot
+KERNEL=$(ls chroot/boot/vmlinuz-* | sort -V | tail -n 1)
+INITRD=$(ls chroot/boot/initrd.img-* | sort -V | tail -n 1)
+
+if [ -f "$KERNEL" ]; then
+    cp -v "$KERNEL" binary/live/vmlinuz
+    cp -v "$INITRD" binary/live/initrd.img
+    echo "Kernel and Initrd copied successfully."
+else
+    echo "[ERROR] Kernel not found in chroot/boot!"
+    exit 1
+fi

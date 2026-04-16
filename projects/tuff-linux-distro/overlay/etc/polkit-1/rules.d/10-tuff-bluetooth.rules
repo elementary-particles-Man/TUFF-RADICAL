@@ -1,0 +1,9 @@
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.bluez.device.setproperty" ||
+         action.id == "org.bluez.device.connect" ||
+         action.id == "org.bluez.adapter.setproperty" ||
+         action.id == "org.bluez.adapter.scan") &&
+        subject.isInGroup("bluetooth")) {
+        return polkit.Result.YES;
+    }
+});

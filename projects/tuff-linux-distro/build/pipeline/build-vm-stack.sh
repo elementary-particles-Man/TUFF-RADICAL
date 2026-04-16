@@ -24,8 +24,8 @@ mkdir -p "$MNT_DIR"
 
 echo "--- TUFF Linux Distro: Creating VM Image ---"
 
-# 1. 2GB の空のイメージを作成
-dd if=/dev/zero of="$OUT_IMG" bs=1M count=2048
+# 1. 8GB の空のイメージを作成
+dd if=/dev/zero of="$OUT_IMG" bs=1M count=8192
 
 # 2. パーティション作成 (BIOS+UEFI 両対応: GPT + BIOS Boot Partition + ESP + Root)
 parted -s "$OUT_IMG" mklabel gpt

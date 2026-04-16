@@ -2,8 +2,9 @@
 # TUFF-RADICAL (T-RAD): TUFF-Xwin Fusion Build Script
 set -e
 
-XWIN_SRC="/media/flux/THPDOC/Develop/TUFF-Xwin"
-OVERLAY_DIR="$(cd "$(dirname "$0")/../../overlay" && pwd)"
+TRAD_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+XWIN_SRC="${XWIN_SRC:-$(cd "${TRAD_ROOT}/../TUFF-Xwin" 2>/dev/null && pwd || echo "")}"
+OVERLAY_DIR="${TRAD_ROOT}/projects/tuff-linux-distro/overlay"
 BIN_DIR="${OVERLAY_DIR}/usr/local/bin"
 
 echo "--- T-RAD: Fusing with TUFF-Xwin (Waybroker) ---"

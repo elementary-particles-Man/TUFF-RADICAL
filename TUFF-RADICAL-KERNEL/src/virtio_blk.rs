@@ -1,5 +1,3 @@
-use crate::serial_println;
-
 /// 仮想環境 (QEMU VirtIO) における物理ディスク制御の概念実証
 pub struct VirtioBlk {
     pci_base: u64,
@@ -13,7 +11,10 @@ impl VirtioBlk {
 
     /// ディスクへの「移住（インストール）」をシミュレート
     pub fn perform_installation(&self) {
-        serial_println!("TUFF-RADICAL-COMMANDER [INSTALL-01]: Target disk identified. Starting T-RAD Deployment...");
+        serial_println!(
+            "TUFF-RADICAL-COMMANDER [INSTALL-01]: Target disk at PCI 0x{:x} identified. Starting T-RAD Deployment...",
+            self.pci_base
+        );
         
         // 1. パーティショニングのシミュレート
         serial_println!("=> Step 1: Creating GPT Partition Table on target...");

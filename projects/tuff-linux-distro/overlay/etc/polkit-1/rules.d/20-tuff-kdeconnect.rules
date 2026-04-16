@@ -1,0 +1,6 @@
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.kde.kdeconnect") == 0 &&
+        subject.active && subject.local) {
+        return polkit.Result.YES;
+    }
+});

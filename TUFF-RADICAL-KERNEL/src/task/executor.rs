@@ -1,11 +1,15 @@
+use crate::interrupts;
 use super::{Task, TaskId};
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use core::hint::spin_loop;
 use core::task::{Waker, Context, Poll};
-use crossbeam_queue::ArrayQueue;
+use crossbeam_queue::SegQueue;
+use spin::Mutex;
 
 pub struct Executor {
     tasks: BTreeMap<TaskId, Task>,
-    task_queue: Arc<ArrayQueue<TaskId>>,
+    task_queue: Arc<SegQueue<TaskId>>,
+    queued_tasks: Arc<Mutex<BTreeSet<TaskId>>>,
     waker_cache: BTreeMap<TaskId, Waker>,
 }
 
@@ -13,7 +17,8 @@ impl Executor {
     pub fn new() -> Self {
         Executor {
             tasks: BTreeMap::new(),
-            task_queue: Arc::new(ArrayQueue::new(100)),
+            task_queue: Arc::new(SegQueue::new()),
+            queued_tasks: Arc::new(Mutex::new(BTreeSet::new())),
             waker_cache: BTreeMap::new(),
         }
     }
@@ -21,40 +26,36 @@ impl Executor {
     pub fn spawn(&mut self, task: Task) {
         let task_id = task.id;
         if self.tasks.insert(task_id, task).is_some() {
-            // 哲学: 既存のIDと同じタスクが来てもパニックせず、古いものを上書きして状態を固定する
-            // または無視する。ここでは安全に無視する（Voidへ捨てる）
             return;
         }
-        
-        // 哲学: Sovereign Void (虚無の境界)
-        // 100の物理境界を超えるものは、システムの状態を一切変えずに「無」へ捨てる。
-        // エラーも返さず、パニックもせず、Mythosに「限界に達した」という観測結果すら与えない。
-        if let Err(_) = self.task_queue.push(task_id) {
-            // タスクはキューに入らず、Dropされて虚無に消える。
-            self.tasks.remove(&task_id);
-        }
+
+        enqueue_task(&self.task_queue, &self.queued_tasks, task_id);
     }
 
     fn run_ready_tasks(&mut self) {
         let Self {
             tasks,
             task_queue,
+            queued_tasks,
             waker_cache,
         } = self;
 
         while let Some(task_id) = task_queue.pop() {
+            dequeue_task(queued_tasks, task_id);
+
             let task = match tasks.get_mut(&task_id) {
                 Some(task) => task,
                 None => continue,
             };
             let waker = waker_cache
                 .entry(task_id)
-                .or_insert_with(|| TaskWaker::new(task_id, task_queue.clone()));
+                .or_insert_with(|| TaskWaker::into_waker(task_id, task_queue.clone(), queued_tasks.clone()));
             let mut context = Context::from_waker(waker);
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
                     tasks.remove(&task_id);
                     waker_cache.remove(&task_id);
+                    dequeue_task(queued_tasks, task_id);
                 }
                 Poll::Pending => {}
             }
@@ -70,9 +71,13 @@ impl Executor {
 
     fn sleep_if_idle(&self) {
         if self.task_queue.is_empty() {
-            // 安全に割り込みを許可して待機
-            x86_64::instructions::interrupts::enable_and_hlt();
-            x86_64::instructions::interrupts::disable();
+            if interrupts::interrupt_timer_ready() {
+                x86_64::instructions::interrupts::enable_and_hlt();
+                x86_64::instructions::interrupts::disable();
+            } else {
+                interrupts::advance_cooperative_tick();
+                spin_loop();
+            }
         }
     }
 }
@@ -81,19 +86,25 @@ use alloc::task::Wake;
 
 struct TaskWaker {
     task_id: TaskId,
-    task_queue: Arc<ArrayQueue<TaskId>>,
+    task_queue: Arc<SegQueue<TaskId>>,
+    queued_tasks: Arc<Mutex<BTreeSet<TaskId>>>,
 }
 
 impl TaskWaker {
-    fn new(task_id: TaskId, task_queue: Arc<ArrayQueue<TaskId>>) -> Waker {
+    fn into_waker(
+        task_id: TaskId,
+        task_queue: Arc<SegQueue<TaskId>>,
+        queued_tasks: Arc<Mutex<BTreeSet<TaskId>>>,
+    ) -> Waker {
         Waker::from(Arc::new(TaskWaker {
             task_id,
             task_queue,
+            queued_tasks,
         }))
     }
 
     fn wake_task(&self) {
-        self.task_queue.push(self.task_id).expect("task_queue full");
+        enqueue_task(&self.task_queue, &self.queued_tasks, self.task_id);
     }
 }
 
@@ -105,4 +116,23 @@ impl Wake for TaskWaker {
     fn wake_by_ref(self: &Arc<Self>) {
         self.wake_task();
     }
+}
+
+fn enqueue_task(
+    task_queue: &Arc<SegQueue<TaskId>>,
+    queued_tasks: &Arc<Mutex<BTreeSet<TaskId>>>,
+    task_id: TaskId,
+) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut queued = queued_tasks.lock();
+        if queued.insert(task_id) {
+            task_queue.push(task_id);
+        }
+    });
+}
+
+fn dequeue_task(queued_tasks: &Arc<Mutex<BTreeSet<TaskId>>>, task_id: TaskId) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        queued_tasks.lock().remove(&task_id);
+    });
 }

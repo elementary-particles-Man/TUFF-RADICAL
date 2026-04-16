@@ -5,6 +5,7 @@
 systemd
 systemd-sysv
 linux-image-amd64
+linux-headers-amd64
 udev
 kmod
 iproute2
@@ -24,35 +25,106 @@ grub-efi-amd64-bin
 e2fsprogs
 parted
 fdisk
+btrfs-progs
+dosfstools
+ntfs-3g
+udisks2
+gvfs
+gvfs-backends
+gvfs-fuse
 
-# Basic Connectivity
+# Basic Connectivity & Network Hardware
+sudo
 ssh
 openssh-server
 ca-certificates
 curl
 wget
 zram-tools
+network-manager
+wpasupplicant
+wireless-tools
+rfkill
+bluetooth
+bluez
+bluez-obexd
+bluedevil
 
-# Support tools
+# Support tools & Hardware Enablement
 pciutils
 usbutils
 lshw
 htop
 tmux
 vim-tiny
-linux-headers-amd64
 intel-microcode
+amd64-microcode
 firmware-linux-nonfree
+firmware-amd-graphics
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-misc-nonfree
+firmware-sof-signed
 intel-gpu-tools
-intel-media-va-driver-non-free
+intel-media-va-driver
+mesa-va-drivers
+mesa-vdpau-drivers
 linux-cpupower
-libmimalloc2.0
+libmimalloc3
 zstd
+upower
+xdg-utils
+cups
+acpi
+acpid
+
+# Audio & Pipewire
+pipewire
+pipewire-audio
+pipewire-pulse
+pipewire-alsa
+wireplumber
+libspa-0.2-bluetooth
+alsa-utils
+
+# KDE Plasma userland over TUFF-Xwin
+xwayland
+dbus-user-session
 libwayland-server0
 libwayland-client0
 libwayland-egl1
 libxkbcommon0
-vulkan-tools
 mesa-vulkan-drivers
-xwayland
+vulkan-tools
+kde-plasma-desktop
+konsole
+dolphin
+plasma-nm
+plasma-pa
+systemsettings
+xdg-desktop-portal-kde
 polkitd
+
+# Live System Support
+live-boot
+live-config
+live-config-systemd
+calamares
+calamares-settings-debian
+debian-installer-launcher
+
+# Locale & Input (Japanese)
+locales
+task-japanese
+fonts-noto-cjk
+fonts-noto-cjk-extra
+fcitx5
+fcitx5-mozc
+kde-config-fcitx5
+libpam-kwallet5
+
+# Web Browsers
+firefox-esr
+chromium
+firefox-esr-l10n-ja

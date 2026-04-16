@@ -12,10 +12,6 @@ if command -v cpupower &> /dev/null; then
 fi
 
 # --- VULKAN DOMAIN TUNING ---
-# Aggressive Intel ANV / Vulkan offloading environment variables
-export ANV_QUEUE_THREAD_DISABLE=0       # Enable multithreaded queue submissions
-export MESA_GLSL_CACHE_DISABLE=0        # Ensure shader caching
-export vblank_mode=0                    # Uncap framerate/sync for compute
 export RADV_PERFTEST=aco,nv_ms          # For AMD fallback, force ACO compiler
 
 # 1. GPU / Vulkan Compatibility Check
@@ -37,15 +33,7 @@ echo "[OK] Detected $GPU_COUNT Vulkan-capable device(s)."
 cat <<EOF > /run/tuff-vulkan-state
 TUFF_VULKAN_OFFLOAD=1
 TUFF_INTEL_COMPUTE_ACTIVE=1
-ANV_QUEUE_THREAD_DISABLE=0
-MESA_GLSL_CACHE_DISABLE=0
 EOF
-
-# Load system-wide environment variables for user sessions
-if ! grep -q "TUFF_VULKAN_OFFLOAD" /etc/environment 2>/dev/null; then
-    echo "TUFF_VULKAN_OFFLOAD=1" >> /etc/environment
-    echo "ANV_QUEUE_THREAD_DISABLE=0" >> /etc/environment
-fi
 
 # 3. Resource Limits (For unbounded GPU computation)
 # Removes memory locking restrictions to prevent pinned memory eviction during large shader execution.

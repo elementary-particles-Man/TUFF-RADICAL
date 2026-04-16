@@ -16,7 +16,7 @@ pub fn detect_features() -> CpuFeatures {
     let mut features = CpuFeatures::default();
 
     // Leaf 1: Basic features and thread count
-    let res1 = unsafe { __cpuid(1) };
+    let res1 = __cpuid(1);
     features.has_avx = (res1.ecx & (1 << 28)) != 0;
     features.has_xsave = (res1.ecx & (1 << 26)) != 0;
     features.has_rdrand = (res1.ecx & (1 << 30)) != 0;
@@ -27,7 +27,7 @@ pub fn detect_features() -> CpuFeatures {
     }
 
     // Leaf 7, Subleaf 0: Extended features
-    let res7 = unsafe { __cpuid(7) };
+    let res7 = __cpuid(7);
     features.has_avx2 = (res7.ebx & (1 << 5)) != 0;
     features.has_avx512f = (res7.ebx & (1 << 16)) != 0;
     features.has_vaes = (res7.ecx & (1 << 9)) != 0;
@@ -35,6 +35,7 @@ pub fn detect_features() -> CpuFeatures {
     features
 }
 
+#[allow(dead_code)]
 pub unsafe fn enable_simd_hardware() {
     let features = detect_features();
     if !features.has_xsave {
