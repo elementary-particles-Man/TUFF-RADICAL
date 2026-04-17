@@ -1,8 +1,9 @@
 [build]
 target = "x86_64-unknown-uefi"
+# LLVM ERROR回避のため、明示的なznver2指定。
+# 特定の機能がcompiler_builtinsを壊す場合は、ここで-target-featureを調整する。
 rustflags = [
-    "-C", "target-cpu=x86-64-v4",
-    "-Z", "share-generics=y"
+    "-C", "target-cpu=znver2",
 ]
 
 [unstable]

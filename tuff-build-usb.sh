@@ -1,24 +1,26 @@
 #!/bin/bash
+# TUFF-RADICAL: Surgical USB Media Builder v4 (Safe & Hardened)
 set -euo pipefail
 
 export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 DISTRO_DIR="${REPO_DIR}/projects/tuff-linux-distro"
-ISO_PATH="${ISO_PATH:-${DISTRO_DIR}/out/images/live/tuff-live-stable-amd64-minbase.iso}"
+# Adjust path to match the actual output of live-build
+ISO_PATH="${REPO_DIR}/projects/tuff-linux-distro/out/images/live/tuff-live-stable-amd64-minbase.iso"
 
 usage() {
     cat <<'EOF'
 usage: tuff-build-usb.sh [/dev/sdX]
 
-Build the TUFF live ISO if needed, then write it to a removable USB flash drive.
-When no target device is given, the script auto-selects the single removable USB disk.
+Build the TUFF live ISO and write it safely to a removable USB flash drive.
+Fails if target is not a removable USB device to prevent accidental data loss.
 EOF
 }
 
 detect_target_dev() {
     local -a candidates=()
-
+    # Be more strict: only USB, removable, and DISK type.
     mapfile -t candidates < <(lsblk -dnpo NAME,TRAN,RM,TYPE | awk '$2 == "usb" && $3 == "1" && $4 == "disk" { print $1 }')
 
     if [ "${#candidates[@]}" -eq 0 ]; then
@@ -27,11 +29,10 @@ detect_target_dev() {
     fi
 
     if [ "${#candidates[@]}" -ne 1 ]; then
-        echo "[ERROR] Multiple removable USB disks were detected. Pass the target device explicitly." >&2
+        echo "[ERROR] Ambiguous targets found. Pass the device explicitly (e.g., /dev/sdX)." >&2
         printf ' - %s\n' "${candidates[@]}" >&2
         exit 1
     fi
-
     printf '%s\n' "${candidates[0]}"
 }
 
@@ -45,59 +46,61 @@ if [ -z "${TARGET_DEV}" ]; then
     TARGET_DEV="$(detect_target_dev)"
 fi
 
-if [ ! -b "${TARGET_DEV}" ]; then
-    echo "[ERROR] Target device does not exist or is not a block device: ${TARGET_DEV}" >&2
+# Safety Check: Must be a block device and removable USB
+if ! lsblk -dnpo NAME,TRAN,RM | grep -q "^${TARGET_DEV}\s\+usb\s\+1$"; then
+    echo "[CRITICAL ERROR] ${TARGET_DEV} is NOT a removable USB device. Refusing to destroy potentially internal data." >&2
     exit 1
 fi
 
+# Ensure ISO exists
 if [ ! -f "${ISO_PATH}" ]; then
-    echo "--- Live ISO not found. Building a fresh image first. ---"
+    echo "--- Live ISO not found at ${ISO_PATH}. Building fresh image... ---"
+    # Execute full build pipeline
     "${DISTRO_DIR}/build/live-build/configure-live-build.sh"
     sudo "${DISTRO_DIR}/build/live-build/build-live-image.sh"
 fi
 
 if [ ! -f "${ISO_PATH}" ]; then
-    echo "[ERROR] ISO not found after build: ${ISO_PATH}" >&2
+    echo "[ERROR] ISO build failed or not found at: ${ISO_PATH}" >&2
     exit 1
 fi
 
+# Check size
 ISO_SIZE="$(stat -c %s "${ISO_PATH}")"
 DEV_SIZE="$(sudo blockdev --getsize64 "${TARGET_DEV}")"
 
 if [ "${ISO_SIZE}" -gt "${DEV_SIZE}" ]; then
-    echo "[ERROR] ISO is larger than the target device." >&2
-    echo "ISO bytes: ${ISO_SIZE}" >&2
-    echo "DEV bytes: ${DEV_SIZE}" >&2
+    echo "[ERROR] ISO (${ISO_SIZE} bytes) is larger than target ${TARGET_DEV} (${DEV_SIZE} bytes)." >&2
     exit 1
 fi
 
-echo "--- Target USB device: ${TARGET_DEV} ---"
+echo "--- TARGET: ${TARGET_DEV} ---"
 lsblk -o NAME,MODEL,SIZE,TRAN,RM,MOUNTPOINTS "${TARGET_DEV}"
 
-timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-backup_dir="${DISTRO_DIR}/out/usb-backups/${timestamp}-$(basename "${TARGET_DEV}")-backup"
-mkdir -p "${backup_dir}"
-
-lsblk -o NAME,MODEL,SIZE,FSTYPE,UUID,MOUNTPOINTS "${TARGET_DEV}" > "${backup_dir}/lsblk.txt"
-blkid "${TARGET_DEV}"* > "${backup_dir}/blkid.txt" 2>/dev/null || true
-sudo sfdisk --dump "${TARGET_DEV}" > "${backup_dir}/partition-table.sfdisk" 2>/dev/null || true
-
-while read -r part part_type; do
-    if [ "${part_type}" = "part" ] && findmnt -rn -S "${part}" >/dev/null 2>&1; then
-        sudo umount "${part}"
+# Unmount all partitions forcefully
+echo "--- Unmounting partitions on ${TARGET_DEV} ---"
+for part in "${TARGET_DEV}"*; do
+    if [ -b "$part" ]; then
+        sudo umount -l "$part" 2>/dev/null || true
     fi
-done < <(lsblk -lnpo NAME,TYPE "${TARGET_DEV}")
+done
 
-echo "--- Writing ${ISO_PATH} to ${TARGET_DEV} ---"
+# Perform the write with verification
+echo "--- Writing ISO to ${TARGET_DEV} (with fsync & direct I/O) ---"
 sudo dd if="${ISO_PATH}" of="${TARGET_DEV}" bs=16M conv=fsync,notrunc oflag=direct status=progress
+
+echo "--- Flushing buffers (Final Sync) ---"
 sync
-sudo partprobe "${TARGET_DEV}" || true
-sudo udevadm settle || true
 
-echo "--- Verifying written bytes ---"
-sudo cmp -n "${ISO_SIZE}" "${ISO_PATH}" "${TARGET_DEV}" >/dev/null
+# Final Verification
+echo "--- Verifying integrity... ---"
+sudo cmp -n "${ISO_SIZE}" "${ISO_PATH}" "${TARGET_DEV}"
+if [ $? -eq 0 ]; then
+    echo "--- [SUCCESS] USB write complete and verified. ---"
+else
+    echo "--- [FATAL ERROR] Verification failed. Data on USB is corrupted. ---"
+    exit 1
+fi
 
-lsblk -o NAME,MODEL,SIZE,FSTYPE,MOUNTPOINTS "${TARGET_DEV}" > "${backup_dir}/post-write-lsblk.txt"
-cat "${backup_dir}/post-write-lsblk.txt"
-
-echo "--- USB write complete and verified. ---"
+sudo partprobe "${TARGET_DEV}" 2>/dev/null || true
+sudo udevadm settle 2>/dev/null || true

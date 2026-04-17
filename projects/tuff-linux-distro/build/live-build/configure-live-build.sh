@@ -1,5 +1,5 @@
 #!/bin/bash
-# TUFF-RADICAL: Configure Live-Build Workspace
+# TUFF-RADICAL: Configure Live-Build Workspace v4 (Hardened Sync)
 set -euo pipefail
 
 export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
@@ -14,21 +14,16 @@ if [ ! -x "${PACKAGE_RENDER}" ]; then
     exit 1
 fi
 
-if [ ! -f "${PRESEED_FILE}" ]; then
-    echo "[ERROR] Missing preseed file: ${PRESEED_FILE}"
-    exit 1
-fi
-
 mkdir -p "$LB_WORK_DIR"
 cd "$LB_WORK_DIR"
 
 echo "--- TUFF Linux Distro: Configuring Live-Build ---"
 
-# 古い config を残したまま lb config を重ねると壊れた設定が残る。
+# Clean start to prevent "Zombie Configs"
 rm -rf config auto local
 lb clean --purge >/dev/null 2>&1 || true
 
-# 1. ワークスペースの初期化
+# 1. Base Configuration with Robust USB Params
 lb config \
     --distribution trixie \
     --debian-installer live \
@@ -46,25 +41,26 @@ lb config \
     --apt-recommends true \
     --firmware-binary true \
     --firmware-chroot true \
-    --bootappend-live "boot=live components locales=ja_JP.UTF-8 keyboard-layouts=jp timezone=Asia/Tokyo console=tty0 console=ttyS0,115200n8" \
+    --bootappend-live "boot=live components locales=ja_JP.UTF-8 keyboard-layouts=jp timezone=Asia/Tokyo console=tty0 console=ttyS0,115200n8 usbcore.autosuspend=-1 pcie_aspm=off pci=noaer usbcore.old_scheme_first=1 usbcore.initial_descriptor_timeout=20 random.trust_cpu=on amd_pstate=active" \
     --bootappend-install "auto=true priority=critical locale=ja_JP.UTF-8 console=tty0 console=ttyS0,115200n8"
 
-# 2. パッケージリストの生成
+# 2. Package List Generation using the Unified Renderer
 mkdir -p config/package-lists
-"${PACKAGE_RENDER}" tuff-base tuff-recovery > config/package-lists/tuff-live.list.chroot
+"${PACKAGE_RENDER}" tuff-base > config/package-lists/tuff-live.list.chroot
 
-# 3. Overlay の同期
+# 3. Overlay Sync (Atomic)
 mkdir -p config/includes.chroot
 cp -a "${DISTRO_DIR}/overlay/." config/includes.chroot/
 
-# 4. Preseed の適用
-mkdir -p config/preseed
-install -m 0644 "${PRESEED_FILE}" config/preseed/tuff.preseed.binary
-install -m 0644 "${PRESEED_FILE}" config/preseed/tuff.preseed.chroot
+# DNS Fix for firmware-chroot
+mkdir -p config/includes.chroot/etc
+cp /etc/resolv.conf config/includes.chroot/etc/resolv.conf
 
-# 4. GRUB シリアルコンソール設定の追加 (live 用)
-# config/hooks/0100-grub-serial.chroot などのフックが必要になるかもしれないが、
-# まずは基本構成を完了させる。
+# 4. Preseed Application
+if [ -f "${PRESEED_FILE}" ]; then
+    mkdir -p config/preseed
+    install -m 0644 "${PRESEED_FILE}" config/preseed/tuff.preseed.binary
+    install -m 0644 "${PRESEED_FILE}" config/preseed/tuff.preseed.chroot
+fi
 
-echo "--- Live-Build Configured in: $LB_WORK_DIR ---"
-echo "Next: sudo ./build/live-build/build-live-image.sh"
+echo "--- Live-Build Configured successfully ---"

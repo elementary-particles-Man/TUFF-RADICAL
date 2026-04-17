@@ -1,0 +1,2 @@
+KERNEL=="card*", SUBSYSTEM=="drm", MODE="0666"
+KERNEL=="renderD*", SUBSYSTEM=="drm", MODE="0666"

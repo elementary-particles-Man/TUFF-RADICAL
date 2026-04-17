@@ -1,11 +1,13 @@
 #!/bin/bash
+# TUFF-RADICAL: Surgical Package List Renderer v2 (Consistent Logos)
 set -euo pipefail
 
 usage() {
     cat <<'EOF'
 usage: render-package-list.sh [--format lines|comma] [package-group...]
 
-Render one or more package manifests from projects/tuff-linux-distro/packages/.
+Render one or more package lists from projects/tuff-linux-distro/packages/.
+Looks for *.txt files in each package directory.
 The default output format is newline-delimited package names.
 EOF
 }
@@ -19,10 +21,6 @@ while (($# > 0)); do
         --format)
             shift
             format="${1:-}"
-            if [[ -z "$format" ]]; then
-                echo "[ERROR] --format requires a value" >&2
-                exit 1
-            fi
             ;;
         --help|-h)
             usage
@@ -39,17 +37,26 @@ if [[ ${#groups[@]} -eq 0 ]]; then
     groups=("tuff-base")
 fi
 
+# Collect all .txt package lists in the specified group directories
 files=()
 for group in "${groups[@]}"; do
-    manifest="${DISTRO_DIR}/packages/${group}/manifest.txt"
-    if [[ ! -f "$manifest" ]]; then
-        echo "[ERROR] Missing package manifest: $manifest" >&2
+    group_dir="${DISTRO_DIR}/packages/${group}"
+    if [[ ! -d "$group_dir" ]]; then
+        echo "[ERROR] Missing package directory: $group_dir" >&2
         exit 1
     fi
-    files+=("$manifest")
+    # Only pick .txt files, ignoring README/MANIFEST
+    mapfile -t group_files < <(ls "${group_dir}"/*.txt 2>/dev/null)
+    files+=("${group_files[@]}")
 done
 
+if [[ ${#files[@]} -eq 0 ]]; then
+    echo "[ERROR] No package lists (*.txt) found in: ${groups[*]}" >&2
+    exit 1
+fi
+
 render_lines() {
+    # Enhanced parsing: remove comments, trim whitespace, remove duplicates
     awk '
         {
             sub(/[[:space:]]*#.*/, "", $0)
@@ -66,7 +73,7 @@ case "$format" in
         render_lines
         ;;
     comma)
-        render_lines | paste -sd, -
+        render_lines | tr '\n' ',' | sed 's/,$//'
         ;;
     *)
         echo "[ERROR] Unsupported format: $format" >&2

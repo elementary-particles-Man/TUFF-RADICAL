@@ -16,10 +16,12 @@ sed
 grep
 gawk
 
-# Bootloader
+# Bootloader (Surgical Identity: Dual Boot Support)
 grub2-common
 grub-pc-bin
 grub-efi-amd64-bin
+os-prober
+efibootmgr
 
 # Storage & Filesystem
 e2fsprogs
@@ -41,6 +43,8 @@ ca-certificates
 curl
 wget
 zram-tools
+zstd
+im-config
 network-manager
 wpasupplicant
 wireless-tools
@@ -72,7 +76,6 @@ mesa-va-drivers
 mesa-vdpau-drivers
 linux-cpupower
 libmimalloc3
-zstd
 upower
 xdg-utils
 cups
@@ -121,6 +124,7 @@ fonts-noto-cjk
 fonts-noto-cjk-extra
 fcitx5
 fcitx5-mozc
+fcitx5-frontend-all
 kde-config-fcitx5
 libpam-kwallet5
 

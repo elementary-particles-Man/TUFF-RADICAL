@@ -1,2 +1,13 @@
 # TUFF-RADICAL Global Environment
-# NOTE: Avoid global LD_PRELOAD to prevent browser/sandbox crashes.
+# NOTE: Removed hardcoded Intel driver overrides to ensure AMD/Hybrid compatibility.
+
+# Global hardware acceleration settings
+# Drivers are now handled by mesa-va-drivers / mesa-vdpau-drivers auto-selection.
+# Forcing Wayland for native apps
+QT_QPA_PLATFORM=wayland;xcb
+GDK_BACKEND=wayland,x11
+SDL_VIDEODRIVER=wayland
+CLUTTER_BACKEND=wayland
+
+# ZRAM management optimization
+ZRAM_ALGORITHM=zstd

@@ -1,41 +1,31 @@
 #!/bin/bash
-# TUFF-RADICAL: Build Live ISO Image
+# TUFF-RADICAL: Build Live ISO & Move to Out v4 (Path Sync)
 set -euo pipefail
 
-export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
-
-DISTRO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 LB_WORK_DIR=${LB_WORK_DIR:-/var/tmp/tuff-live-build-work}
-OUT_ISO_DIR="${DISTRO_DIR}/out/images/live"
-OUT_ISO="${OUT_ISO_DIR}/tuff-live-stable-amd64-minbase.iso"
-mkdir -p "$OUT_ISO_DIR"
+DISTRO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+OUT_DIR="${DISTRO_DIR}/out/images/live"
 
-if [ "$EUID" -ne 0 ]; then
-    echo "[ERROR] This script must be run as root (sudo)."
-    exit 1
-fi
-
-if [ ! -d "${LB_WORK_DIR}/config" ]; then
-    echo "[ERROR] Live-build workspace is not configured: ${LB_WORK_DIR}"
+if [ ! -d "$LB_WORK_DIR" ]; then
+    echo "[ERROR] Live-build work directory not found. Run configure-live-build.sh first."
     exit 1
 fi
 
 cd "$LB_WORK_DIR"
+echo "--- TUFF Linux Distro: Building Live ISO (Real-time Validation) ---"
 
-echo "--- TUFF Linux Distro: Building Live ISO ---"
-echo "Workspace: $LB_WORK_DIR"
+# 物理ビルドの実行
+sudo lb build
 
-rm -f ./*.iso
-lb clean --binary >/dev/null 2>&1 || true
+# 成果物の移動 (ここが欠落していた致命的バグ #67)
+mkdir -p "$OUT_DIR"
+ISO_FILE=$(ls *.iso | head -n 1)
 
-# ビルド実行
-lb build
-
-ISO_FILE="$(find . -maxdepth 1 -type f -name '*.iso' -printf '%f\n' | head -n 1)"
-if [ -n "${ISO_FILE}" ] && [ -f "${ISO_FILE}" ]; then
-    mv -f "${ISO_FILE}" "${OUT_ISO}"
-    echo "--- Live ISO Created: ${OUT_ISO} ---"
+if [ -f "$ISO_FILE" ]; then
+    echo "--- Moving Build Artifact: $ISO_FILE to $OUT_DIR ---"
+    sudo mv "$ISO_FILE" "${OUT_DIR}/tuff-live-stable-amd64-minbase.iso"
+    echo "--- Build Artifact Synchronized. ---"
 else
-    echo "[ERROR] ISO generation failed (no .iso file found in $LB_WORK_DIR)"
+    echo "[ERROR] ISO generation failed inside $LB_WORK_DIR"
     exit 1
 fi

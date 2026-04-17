@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=Chromium (Auto/IME)
-Exec=/usr/bin/chromium --enable-features=UseOzonePlatform --ozone-platform-hint=auto --enable-wayland-ime %U
+Name=Chromium
+Exec=/usr/bin/chromium %U
 Terminal=false
 Icon=chromium
 Type=Application

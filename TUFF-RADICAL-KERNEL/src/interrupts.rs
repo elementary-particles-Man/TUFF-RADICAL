@@ -7,12 +7,14 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 pub const TIMER_VECTOR: u8 = 32;
+pub const KEYBOARD_VECTOR: u8 = 33;
 static INTERRUPT_TIMER_READY: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = TIMER_VECTOR,
+    Keyboard = KEYBOARD_VECTOR,
 }
 
 impl InterruptIndex {
@@ -36,9 +38,10 @@ lazy_static! {
         idt.page_fault.set_handler_fn(page_fault_handler);
         idt.general_protection_fault.set_handler_fn(general_protection_handler);
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
+        idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
 
         for i in 32..256 {
-            if i == InterruptIndex::Timer.as_usize() { continue; }
+            if i == InterruptIndex::Timer.as_usize() || i == InterruptIndex::Keyboard.as_usize() { continue; }
             idt[i].set_handler_fn(generic_ignore_handler);
         }
 
@@ -151,6 +154,25 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     crate::apic::end_of_interrupt();
 }
 
-extern "x86-interrupt" fn generic_ignore_handler(_stack_frame: InterruptStackFrame) {
+extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    use x86_64::instructions::port::Port;
+
+    let mut port = Port::new(0x60);
+    let scancode: u8 = unsafe { port.read() };
+
+    if scancode == 0x01 {
+        serial_println!("\n[!!!] EMERGENCY STOP: Escape key detected. System frozen by Commander.");
+        loop { unsafe { core::arch::asm!("hlt"); } }
+    }
+
+    serial_println!("TUFF-RADICAL-KERNEL [IRQ-33]: Keyboard scancode 0x{:02x}", scancode);
+
+    crate::apic::end_of_interrupt();
+}
+
+extern "x86-interrupt" fn generic_ignore_handler(stack_frame: InterruptStackFrame) {
+    // IDTから割り込みベクトルを特定することは難しいため、スタックフレームの情報などを出力
+    serial_println!("TUFF-RADICAL-KERNEL [IRQ-IGNORE]: Unexpected interrupt occurred.");
+    serial_println!("{:#?}", stack_frame);
     crate::apic::end_of_interrupt();
 }
