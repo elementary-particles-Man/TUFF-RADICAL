@@ -6,6 +6,7 @@ export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
 
 DISTRO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PACKAGE_RENDER="${DISTRO_DIR}/build/common/render-package-list.sh"
+PREPARE_OVERLAY="${DISTRO_DIR}/build/common/prepare-overlay.sh"
 PRESEED_FILE="${DISTRO_DIR}/build/live-build/tuff-installer.preseed"
 LB_WORK_DIR=${LB_WORK_DIR:-/var/tmp/tuff-live-build-work}
 
@@ -41,16 +42,17 @@ lb config \
     --apt-recommends true \
     --firmware-binary true \
     --firmware-chroot true \
-    --bootappend-live "boot=live components locales=ja_JP.UTF-8 keyboard-layouts=jp timezone=Asia/Tokyo console=tty0 console=ttyS0,115200n8 usbcore.autosuspend=-1 pcie_aspm=off pci=noaer usbcore.old_scheme_first=1 usbcore.initial_descriptor_timeout=20 random.trust_cpu=on amd_pstate=active" \
-    --bootappend-install "auto=true priority=critical locale=ja_JP.UTF-8 console=tty0 console=ttyS0,115200n8"
+    --bootappend-live "boot=live components locales=ja_JP.UTF-8 keyboard-layouts=jp timezone=Asia/Tokyo console=tty0 pcie_aspm=off pci=noaer random.trust_cpu=on amd_pstate=active" \
+    --bootappend-install "auto=true priority=critical locale=ja_JP.UTF-8 console=tty0"
 
 # 2. Package List Generation using the Unified Renderer
 mkdir -p config/package-lists
 "${PACKAGE_RENDER}" tuff-base > config/package-lists/tuff-live.list.chroot
 
 # 3. Overlay Sync (Atomic)
+OVERLAY_STAGE="$("${PREPARE_OVERLAY}")"
 mkdir -p config/includes.chroot
-cp -a "${DISTRO_DIR}/overlay/." config/includes.chroot/
+cp -a "${OVERLAY_STAGE}/." config/includes.chroot/
 
 # DNS Fix for firmware-chroot
 mkdir -p config/includes.chroot/etc

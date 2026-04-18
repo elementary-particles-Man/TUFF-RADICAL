@@ -5,8 +5,9 @@
 VULKAN_STATE="/run/tuff-vulkan-state"
 
 if [ -f "$VULKAN_STATE" ]; then
+    set -a
     . "$VULKAN_STATE"
-    export TUFF_VULKAN_OFFLOAD TUFF_INTEL_COMPUTE_ACTIVE
+    set +a
 fi
 
 # Resource limits for large shader compilation (Browsers/IDE)

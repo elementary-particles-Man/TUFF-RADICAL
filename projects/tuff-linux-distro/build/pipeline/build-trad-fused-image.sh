@@ -5,6 +5,7 @@ set -euo pipefail
 export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
 
 DISTRO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PREPARE_OVERLAY="${DISTRO_DIR}/build/common/prepare-overlay.sh"
 WORK_DIR="/tmp/tuff-fuse-work"
 BASE_TAR="${DISTRO_DIR}/out/mmdebstrap/tuff-rootfs-stable-amd64-minbase.tar"
 OUT_TAR="${DISTRO_DIR}/out/pipeline/tuff-fused-rootfs.tar"
@@ -29,12 +30,13 @@ trap cleanup EXIT
 
 mkdir -p "$WORK_DIR/merged"
 mkdir -p "$(dirname "$OUT_TAR")"
+OVERLAY_STAGE="$("${PREPARE_OVERLAY}")"
 
 # Layer 1: Base System (Atomic Extract)
 tar --numeric-owner -xf "$BASE_TAR" -C "$WORK_DIR/merged"
 
 # Layer 2: Overlay Sync (Force Refresh)
-cp -a "${DISTRO_DIR}/overlay/." "$WORK_DIR/merged/"
+cp -a "${OVERLAY_STAGE}/." "$WORK_DIR/merged/"
 
 # Logic Validation: Ensure sudo and critical configs survived the fuse
 if [ ! -f "$WORK_DIR/merged/usr/bin/sudo" ]; then

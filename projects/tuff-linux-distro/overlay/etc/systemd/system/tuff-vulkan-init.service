@@ -1,17 +1,14 @@
 [Unit]
 Description=TUFF-RADICAL Vulkan & Intel AVX Compute Initialization
-DefaultDependencies=no
-After=sysinit.target local-fs.target
-Before=basic.target
+After=systemd-modules-load.service local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/tuff-vulkan-init.sh
+ExecStart=/usr/local/lib/tuff/tuff-distro-tools vulkan-init
 RemainAfterExit=yes
 
-# Execute asynchronously without blocking critical I/O
 IOSchedulingClass=idle
 CPUSchedulingPolicy=idle
 
 [Install]
-WantedBy=basic.target
+WantedBy=multi-user.target

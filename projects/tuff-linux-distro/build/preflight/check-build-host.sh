@@ -7,7 +7,7 @@ export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
 echo "--- TUFF Linux Distro: Build Host Preflight Check ---"
 
 # 1. 依存コマンドの確認
-DEPS=("mmdebstrap" "parted" "losetup" "grub-install" "mkfs.ext4" "mkfs.vfat" "xorriso" "lb" "timeout" "qemu-system-x86_64" "cmp")
+DEPS=("cargo" "mmdebstrap" "parted" "losetup" "grub-install" "mkfs.ext4" "mkfs.vfat" "xorriso" "lb" "timeout" "qemu-system-x86_64" "cmp")
 MISSING=0
 
 for cmd in "${DEPS[@]}"; do

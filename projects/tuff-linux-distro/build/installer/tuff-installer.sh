@@ -7,7 +7,8 @@ export PATH=/usr/local/sbin:/usr/sbin:/sbin:${PATH}
 TARGET_DEV="${1:-}"
 ROOTFS_TAR="${2:-}"
 TUFF_USER="${TUFF_USER:-flux}"
-OVERLAY_DIR="$(cd "$(dirname "$0")/../.." && pwd)/overlay"
+DISTRO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PREPARE_OVERLAY="${DISTRO_DIR}/build/common/prepare-overlay.sh"
 MNT_DIR="/tmp/tuff-install-mnt"
 
 cleanup() {
@@ -86,8 +87,9 @@ chroot "$MNT_DIR" id -u "$TUFF_USER" >/dev/null 2>&1 || chroot "$MNT_DIR" userad
 chroot "$MNT_DIR" usermod -aG audio,video,netdev,plugdev,bluetooth,lpadmin "$TUFF_USER" 2>/dev/null || true
 
 # Overlay の適用 (T-RAD Configs)
-if [ -d "$OVERLAY_DIR" ]; then
-    cp -a "${OVERLAY_DIR}/." "$MNT_DIR/"
+OVERLAY_STAGE="$("${PREPARE_OVERLAY}")"
+if [ -d "$OVERLAY_STAGE" ]; then
+    cp -a "${OVERLAY_STAGE}/." "$MNT_DIR/"
     if [ -f "$MNT_DIR/etc/sudoers.d/tuff" ]; then
         chown root:root "$MNT_DIR/etc/sudoers.d/tuff"
         chmod 440 "$MNT_DIR/etc/sudoers.d/tuff"

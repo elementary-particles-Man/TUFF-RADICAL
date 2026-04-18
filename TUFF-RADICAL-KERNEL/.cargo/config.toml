@@ -1,11 +1,9 @@
 [build]
 target = "x86_64-unknown-uefi"
-# LLVM ERROR回避のため、明示的なznver2指定。
-# 特定の機能がcompiler_builtinsを壊す場合は、ここで-target-featureを調整する。
-rustflags = [
-    "-C", "target-cpu=znver2",
-]
 
-[unstable]
-build-std = ["core", "compiler_builtins", "alloc"]
-build-std-features = ["compiler-builtins-mem"]
+[target.x86_64-unknown-uefi]
+# The kernel does runtime SIMD probing, so the build should stay on a generic
+# x86_64 baseline instead of inheriting host-specific AVX tuning.
+rustflags = [
+    "-C", "target-cpu=x86-64",
+]

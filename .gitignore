@@ -7,3 +7,13 @@
 /projects/tuff-linux-distro/out/
 systemrescue.iso
 DietPi_x86_64.7z
+*.deb
+*.udeb
+*.squashfs
+*.img
+*.bin
+*.efi
+*.mod
+*.c32
+*.pf2
+projects/TUFF-RADICAL-LIVE/

@@ -6,10 +6,16 @@ d-i keyboard-configuration/xkb-keymap select jp
 d-i keyboard-configuration/layoutcode string jp
 d-i keyboard-configuration/modelcode string pc106
 
+# 1.5 Hostname (Prompt for PC Name)
+d-i netcfg/get_hostname string 
+d-i netcfg/get_hostname seen false
+d-i netcfg/get_domain string 
+d-i netcfg/get_domain seen false
+
 # 2. User Account (Root & Sudo)
 d-i passwd/root-login boolean true
 # Ensure user is in all standard desktop and admin groups
-d-i passwd/user-default-groups string audio cdrom video sudo netdev plugdev input
+d-i passwd/user-default-groups string audio cdrom video sudo netdev plugdev input bluetooth
 
 
 # 3. Timezone
@@ -23,3 +29,13 @@ d-i passwd/user-fullname string TUFF User
 d-i passwd/username string flux
 d-i passwd/user-password password 0514
 d-i passwd/user-password-again password 0514
+
+# Force user into sudo group (Debian disables this if root-login is true)
+d-i preseed/late_command string in-target usermod -aG sudo flux
+
+# 5. Bootloader (GRUB) Installation
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean true
+d-i grub-installer/bootdev string default
+d-i grub-installer/force-efi-extra-removable boolean true
+
