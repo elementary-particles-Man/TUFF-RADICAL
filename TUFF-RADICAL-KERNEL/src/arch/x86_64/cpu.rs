@@ -1,3 +1,4 @@
+use crate::arch::x86_64::registers::{Cr0, Cr4, xgetbv, xsetbv};
 use core::arch::x86_64::{__cpuid, __cpuid_count};
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -73,18 +74,16 @@ unsafe fn enable_simd_hardware(features: &mut CpuFeatures) -> Result<(), &'stati
         return Err("OSXSAVE not supported");
     }
 
-    let mut cr0: u64;
-    let mut cr4: u64;
-    core::arch::asm!("mov {}, cr0", out(reg) cr0, options(nomem, nostack, preserves_flags));
-    core::arch::asm!("mov {}, cr4", out(reg) cr4, options(nomem, nostack, preserves_flags));
+    let mut cr0 = Cr0::read();
+    let mut cr4 = Cr4::read();
 
     // CR0.MP=1, CR0.EM=0, CR4.OSFXSR=1, CR4.OSXMMEXCPT=1, CR4.OSXSAVE=1
     cr0 |= 1 << 1;
     cr0 &= !(1 << 2);
     cr4 |= (1 << 9) | (1 << 10) | (1 << 18);
 
-    core::arch::asm!("mov cr0, {}", in(reg) cr0, options(nomem, nostack, preserves_flags));
-    core::arch::asm!("mov cr4, {}", in(reg) cr4, options(nomem, nostack, preserves_flags));
+    Cr0::write(cr0);
+    Cr4::write(cr4);
 
     let mut xcr0 = xgetbv(0) | 0x1 | 0x2;
     if features.has_avx {
@@ -159,25 +158,6 @@ fn topology_threads_from_leaf(leaf: u32) -> u32 {
     threads.max(1)
 }
 
-unsafe fn xgetbv(index: u32) -> u64 {
-    let eax: u32;
-    let edx: u32;
-    core::arch::asm!(
-        "xgetbv",
-        in("ecx") index,
-        out("eax") eax,
-        out("edx") edx,
-        options(nomem, nostack)
-    );
-    ((edx as u64) << 32) | eax as u64
-}
 
-unsafe fn xsetbv(index: u32, value: u64) {
-    core::arch::asm!(
-        "xsetbv",
-        in("ecx") index,
-        in("eax") value as u32,
-        in("edx") (value >> 32) as u32,
-        options(nomem, nostack)
-    );
-}
+
+

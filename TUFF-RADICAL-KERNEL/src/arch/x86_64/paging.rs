@@ -1,5 +1,6 @@
+use crate::arch::x86_64::registers::{Cr3, EFER};
 use crate::mm::memory;
-use core::arch::asm;
+
 
 /// ページテーブルのエントリ属性
 const PRESENT: u64 = 1 << 0;
@@ -40,16 +41,13 @@ pub unsafe fn init_paging() {
         }
     }
 
-    asm!("mov cr3, {}", in(reg) pml4_phys);
+    Cr3::write(pml4_phys);
     serial_println!("=> Paging: 4GB identity map active. NXE is enabled, page-level execute policy is pending finer-grained mappings.");
 }
 
 unsafe fn enable_nx_bit() {
     // EFER (Extended Feature Enable Register) の 11ビット目 (NXE) を立てる
-    let efer_msr = 0xC0000080u32;
-    let mut low: u32;
-    let mut high: u32;
-    asm!("rdmsr", in("ecx") efer_msr, out("eax") low, out("edx") high);
-    low |= 1 << 11;
-    asm!("wrmsr", in("ecx") efer_msr, in("eax") low, in("edx") high);
+    let mut efer = EFER.read();
+    efer |= 1 << 11;
+    EFER.write(efer);
 }

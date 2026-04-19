@@ -1,4 +1,5 @@
-use core::arch::asm;
+use crate::drivers::io;
+
 use core::ptr::{read_volatile, write_bytes, write_volatile};
 use core::sync::atomic::{Ordering, compiler_fence};
 
@@ -120,12 +121,12 @@ impl VirtioBlk {
         };
 
         // 1. Reset device
-        write_io_u8(io_base, REG_DEVICE_STATUS, 0);
-        write_io_u8(io_base, REG_DEVICE_STATUS, DEVICE_STATUS_ACKNOWLEDGE | DEVICE_STATUS_DRIVER);
+        io::outb(io_base + REG_DEVICE_STATUS, 0);
+        io::outb(io_base + REG_DEVICE_STATUS, DEVICE_STATUS_ACKNOWLEDGE | DEVICE_STATUS_DRIVER);
 
         // 2. Negotiate queue size
-        write_io_u16(io_base, REG_QUEUE_SELECT, 0);
-        let queue_size = read_io_u16(io_base, REG_QUEUE_SIZE);
+        io::outw(io_base + REG_QUEUE_SELECT, 0);
+        let queue_size = io::inw(io_base + REG_QUEUE_SIZE);
         
         let queue = allocate_queue_layout(queue_size)?;
         let request = allocate_request_buffers()?;
@@ -278,44 +279,15 @@ impl VirtioBlk {
         self.write_u8(REG_DEVICE_STATUS, value);
     }
 
-    unsafe fn read_u8(&self, offset: u16) -> u8 { read_io_u8(self.io_base, offset) }
+    unsafe fn read_u8(&self, offset: u16) -> u8 { io::inb(self.io_base + offset) }
     #[allow(dead_code)]
-    unsafe fn read_u16(&self, offset: u16) -> u16 { read_io_u16(self.io_base, offset) }
-    unsafe fn read_u32(&self, offset: u16) -> u32 { read_io_u32(self.io_base, offset) }
-    unsafe fn write_u16(&self, offset: u16, value: u16) { write_io_u16(self.io_base, offset, value) }
-    unsafe fn write_u32(&self, offset: u16, value: u32) { write_io_u32(self.io_base, offset, value) }
-    unsafe fn write_u8(&self, offset: u16, value: u8) { write_io_u8(self.io_base, offset, value) }
+    unsafe fn read_u16(&self, offset: u16) -> u16 { io::inw(self.io_base + offset) }
+    unsafe fn read_u32(&self, offset: u16) -> u32 { io::inl(self.io_base + offset) }
+    unsafe fn write_u16(&self, offset: u16, value: u16) { io::outw(self.io_base + offset, value) }
+    unsafe fn write_u32(&self, offset: u16, value: u32) { io::outl(self.io_base + offset, value) }
+    unsafe fn write_u8(&self, offset: u16, value: u8) { io::outb(self.io_base + offset, value) }
 }
 
-unsafe fn read_io_u8(base: u16, offset: u16) -> u8 {
-    let value: u8;
-    asm!("in al, dx", out("al") value, in("dx") base + offset, options(nostack, nomem));
-    value
-}
-
-unsafe fn read_io_u16(base: u16, offset: u16) -> u16 {
-    let value: u16;
-    asm!("in ax, dx", out("ax") value, in("dx") base + offset, options(nostack, nomem));
-    value
-}
-
-unsafe fn read_io_u32(base: u16, offset: u16) -> u32 {
-    let value: u32;
-    asm!("in eax, dx", out("eax") value, in("dx") base + offset, options(nostack, nomem));
-    value
-}
-
-unsafe fn write_io_u8(base: u16, offset: u16, value: u8) {
-    asm!("out dx, al", in("dx") base + offset, in("al") value, options(nostack, nomem));
-}
-
-unsafe fn write_io_u16(base: u16, offset: u16, value: u16) {
-    asm!("out dx, ax", in("dx") base + offset, in("ax") value, options(nostack, nomem));
-}
-
-unsafe fn write_io_u32(base: u16, offset: u16, value: u32) {
-    asm!("out dx, eax", in("dx") base + offset, in("eax") value, options(nostack, nomem));
-}
 
 unsafe fn allocate_queue_layout(size: u16) -> Option<QueueLayout> {
     let size_val = size as usize;

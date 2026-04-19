@@ -1,4 +1,5 @@
-use core::arch::asm;
+use crate::drivers::io;
+
 
 #[derive(Clone, Copy, Debug)]
 pub struct PciAddress {
@@ -21,11 +22,9 @@ pub unsafe fn read_config_u32(addr: PciAddress, offset: u8) -> u32 {
         | ((addr.func as u32) << 8)
         | (offset as u32 & 0xFC);
 
-    asm!("out dx, eax", in("dx") 0xCF8_u16, in("eax") address, options(nostack, nomem));
+    io::outl(0xCF8, address);
 
-    let mut data: u32;
-    asm!("in eax, dx", out("eax") data, in("dx") 0xCFC_u16, options(nostack, nomem));
-    data
+io::inl(0xCFC)
 }
 
 pub unsafe fn read_config_u16(addr: PciAddress, offset: u8) -> u16 {

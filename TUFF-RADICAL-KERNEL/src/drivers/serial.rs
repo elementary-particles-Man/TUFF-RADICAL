@@ -1,4 +1,5 @@
-use core::arch::asm;
+use crate::drivers::io;
+
 use core::fmt;
 
 pub struct SerialPort {
@@ -22,13 +23,11 @@ impl SerialPort {
     }
 
     unsafe fn out_b(&self, offset: u16, data: u8) {
-        asm!("out dx, al", in("dx") self.base + offset, in("al") data);
+        io::outb(self.base + offset, data);
     }
 
     unsafe fn in_b(&self, offset: u16) -> u8 {
-        let mut data: u8;
-        asm!("in al, dx", out("al") data, in("dx") self.base + offset);
-        data
+        io::inb(self.base + offset)
     }
 
     fn is_transmit_empty(&self) -> bool {
