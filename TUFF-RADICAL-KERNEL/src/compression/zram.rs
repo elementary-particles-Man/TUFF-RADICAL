@@ -3,7 +3,7 @@ use core::arch::x86_64::_rdtsc;
 use core::sync::atomic::{AtomicBool, Ordering};
 use lz4_flex::{compress_prepend_size, decompress_size_prepended};
 use spin::Mutex;
-use crate::snappy;
+use crate::compression::snappy;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompressionBackend {

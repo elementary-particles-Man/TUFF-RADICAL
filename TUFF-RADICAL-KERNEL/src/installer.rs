@@ -1,4 +1,4 @@
-use crate::block::{BlockDevice, SECTOR_SIZE};
+use crate::drivers::block::{BlockDevice, SECTOR_SIZE};
 
 pub fn run_install_pipeline(disk: &dyn BlockDevice) {
     serial_println!(

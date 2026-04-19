@@ -1,6 +1,5 @@
-use crate::memory;
+use crate::mm::memory;
 use core::arch::asm;
-use crate::serial_println;
 
 /// ページテーブルのエントリ属性
 const PRESENT: u64 = 1 << 0;

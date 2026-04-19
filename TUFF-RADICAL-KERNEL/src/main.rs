@@ -8,30 +8,23 @@ use core::arch::asm;
 use uefi::prelude::*;
 use uefi::allocator::exit_boot_services;
 
-mod memory;
-mod paging;
-mod gpu;
-mod cpu;
 #[macro_use]
-mod serial;
-mod gdt;
-mod interrupts;
-mod apic;
-mod pci;
-mod snappy;
+mod drivers;
+mod arch;
+mod mm;
+mod compression;
 mod task;
-mod zram;
-mod virtio_blk;
-mod block;
 mod installer;
-mod allocator;
 
 use task::{Task, executor::Executor};
-use crate::gpu::GpuCommandRing;
-use crate::virtio_blk::VirtioBlk;
+use crate::drivers::gpu::GpuCommandRing;
+use crate::drivers::virtio_blk::VirtioBlk;
 use core::{future::Future, pin::Pin, task::{Context, Poll}};
 use core::sync::atomic::Ordering;
-use crate::pci::{PciAddress, PciBar};
+use crate::drivers::pci::{PciAddress, PciBar};
+use crate::arch::x86_64::{interrupts, cpu, gdt, apic, paging};
+use crate::mm::memory;
+use crate::compression::zram;
 
 // --- 非同期スリープの実装 ---
 struct SleepFuture {
@@ -61,7 +54,7 @@ impl Future for SleepFuture {
 
 #[entry]
 fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
-    unsafe { serial::COM1.lock().init(); }
+    unsafe { drivers::serial::COM1.lock().init(); }
     serial_println!("--- TUFF-RADICAL-KERNEL T-RAD REBIRTH (FINAL TUNE) ---");
 
     serial_println!("TUFF-RADICAL-KERNEL: Requesting UEFI ExitBootServices handoff...");
@@ -135,20 +128,20 @@ async fn async_pcie_probe_and_init() {
 
     for bus in 0..=255 {
         for slot in 0..=31 {
-            let vendor_id = unsafe { pci::read_config_u32(PciAddress { bus, slot, func: 0 }, 0) & 0xFFFF };
+            let vendor_id = unsafe { drivers::pci::read_config_u32(PciAddress { bus, slot, func: 0 }, 0) & 0xFFFF };
             if vendor_id == 0xFFFF { continue; }
             for func in 0..=7 {
                 let address = PciAddress { bus, slot, func };
-                let id_reg = unsafe { pci::read_config_u32(address, 0) };
+                let id_reg = unsafe { drivers::pci::read_config_u32(address, 0) };
                 if (id_reg & 0xFFFF) == 0xFFFF { continue; }
-                let class_reg = unsafe { pci::read_config_u32(address, 0x08) };
+                let class_reg = unsafe { drivers::pci::read_config_u32(address, 0x08) };
                 let class = (class_reg >> 24) & 0xFF;
                 let vendor_id = id_reg & 0xFFFF;
                 
                 if class == 0x03 {
                     if let Some(bar0) = unsafe { read_pci_bar0(address) } {
                         gpu_mmio_base = Some(bar0);
-                        unsafe { gpu::test_draw(bar0); }
+                        unsafe { drivers::gpu::test_draw(bar0); }
                     }
                 }
 
@@ -211,7 +204,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 unsafe fn read_pci_bar0(address: PciAddress) -> Option<u64> {
-    match pci::read_bar(address, 0)? {
+    match drivers::pci::read_bar(address, 0)? {
         PciBar::Memory32 { base } | PciBar::Memory64 { base } => Some(base),
         PciBar::Io { .. } => None,
     }

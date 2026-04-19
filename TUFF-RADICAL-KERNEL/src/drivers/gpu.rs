@@ -1,4 +1,3 @@
-use crate::serial_println;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use alloc::vec::Vec;
 

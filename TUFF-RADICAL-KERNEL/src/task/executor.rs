@@ -1,4 +1,4 @@
-use crate::interrupts;
+use crate::arch::x86_64::interrupts;
 use super::{Task, TaskId};
 use alloc::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 use core::hint::spin_loop;

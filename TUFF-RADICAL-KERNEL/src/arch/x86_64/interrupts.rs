@@ -2,7 +2,7 @@ use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use alloc::vec::Vec;
 use core::task::Waker;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::gdt;
+use crate::arch::x86_64::gdt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
@@ -151,7 +151,7 @@ pub static TICKS: AtomicU64 = AtomicU64::new(0);
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
     wake_due_timer_waiters();
-    crate::apic::end_of_interrupt();
+    crate::arch::x86_64::apic::end_of_interrupt();
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -167,12 +167,12 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 
     serial_println!("TUFF-RADICAL-KERNEL [IRQ-33]: Keyboard scancode 0x{:02x}", scancode);
 
-    crate::apic::end_of_interrupt();
+    crate::arch::x86_64::apic::end_of_interrupt();
 }
 
 extern "x86-interrupt" fn generic_ignore_handler(stack_frame: InterruptStackFrame) {
     // IDTから割り込みベクトルを特定することは難しいため、スタックフレームの情報などを出力
     serial_println!("TUFF-RADICAL-KERNEL [IRQ-IGNORE]: Unexpected interrupt occurred.");
     serial_println!("{:#?}", stack_frame);
-    crate::apic::end_of_interrupt();
+    crate::arch::x86_64::apic::end_of_interrupt();
 }

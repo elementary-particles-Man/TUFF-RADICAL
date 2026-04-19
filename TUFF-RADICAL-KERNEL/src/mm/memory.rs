@@ -1,7 +1,6 @@
 use uefi::table::boot::{MemoryAttribute, MemoryDescriptor, MemoryMap, MemoryType, PAGE_SIZE};
-use crate::serial_println;
 use spin::Mutex;
-use crate::allocator::{ALLOCATOR, HEAP_SIZE_BYTES};
+use crate::mm::allocator::{ALLOCATOR, HEAP_SIZE_BYTES};
 const MAX_MEMORY_DESCRIPTORS: usize = 512;
 const EMPTY_DESCRIPTOR: MemoryDescriptor = MemoryDescriptor {
     ty: MemoryType::RESERVED,
