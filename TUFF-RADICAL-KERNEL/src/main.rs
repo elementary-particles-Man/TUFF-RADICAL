@@ -22,7 +22,7 @@ use crate::drivers::virtio_blk::VirtioBlk;
 use core::{future::Future, pin::Pin, task::{Context, Poll}};
 use core::sync::atomic::Ordering;
 use crate::drivers::pci::{PciAddress, PciBar};
-use crate::arch::x86_64::{interrupts, cpu, gdt, apic, paging};
+use crate::arch::x86_64::{interrupts, cpu, gdt, apic, paging, syscall};
 use crate::mm::memory;
 use crate::compression::zram;
 
@@ -79,6 +79,7 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     serial_println!("TUFF-RADICAL-KERNEL: Asserting absolute control over CPU (GDT/IDT)...");
     gdt::init();
     interrupts::init_idt();
+    unsafe { syscall::init(); }
     let _apic_topology = apic::init(&runtime_table);
     interrupts::set_interrupt_timer_ready(apic::timer_routing_ready());
     zram::init();

@@ -90,3 +90,15 @@ pub unsafe fn xsetbv(index: u32, value: u64) {
     );
 }
 
+
+#[allow(dead_code)]
+pub struct GsBase;
+#[allow(dead_code)]
+impl GsBase {
+    pub unsafe fn write_kernel(val: u64) {
+        GS_BASE.write(val);
+    }
+    pub unsafe fn write_user(val: u64) {
+        KERNEL_GS_BASE.write(val);
+    }
+}
