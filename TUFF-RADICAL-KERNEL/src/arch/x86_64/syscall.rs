@@ -15,8 +15,12 @@ pub unsafe fn init() {
     // bits 48-63: User CS (data is CS-8 / in our GDT user_code is after user_data, but standard is different. 
     // Standard: Kernel CS: 0x08, Kernel SS: 0x10, User SS: 0x1B, User CS: 0x23)
     let selectors = gdt::get_selectors();
+    // STAR MSR requirements:
+    // [47:32] -> Kernel CS (SS is assumed to be CS+8)
+    // [63:48] -> User CS (CS is assumed to be Base+16, SS is Base+8)
+    // Our GDT: 0=Null, 8=KCode, 10=KData, 18=UData, 20=UCode
     let star_val = (selectors.kernel_code_selector.0 as u64) << 32 
-                 | (selectors.user_data_selector.0 as u64 | 3) << 48;
+                 | (selectors.kernel_data_selector.0 as u64 | 3) << 48;
     STAR.write(star_val);
 
     // 2. LSTAR: Entry point for SYSCALL
@@ -34,7 +38,7 @@ pub unsafe fn init() {
     let kernel_stack = crate::mm::memory::allocate_contiguous_pages(5).unwrap() + (5 * 4096);
     static mut GS_STRUCT: [u64; 4] = [0; 4]; // [0]=Kernel RSP, [1]=Scratch, [2]=User RSP, [3]=Scratch
     GS_STRUCT[0] = kernel_stack;
-    crate::arch::x86_64::registers::GS_BASE.write(ptr::addr_of!(GS_STRUCT) as u64);
+    crate::arch::x86_64::registers::KERNEL_GS_BASE.write(ptr::addr_of!(GS_STRUCT) as u64);
 
     serial_println!("TUFF-RADICAL-SYSCALL: SCE enabled. Entry point at 0x{:x}", syscall_entry as *const () as u64);
 }
@@ -62,6 +66,16 @@ unsafe extern "C" fn syscall_entry() {
 }
 
 #[no_mangle]
+
+#[no_mangle]
 extern "C" fn handle_syscall(id: u64, arg1: u64) {
-    serial_println!("TUFF-RADICAL-SYSCALL: Request received! ID={} Arg1={}", id, arg1);
+    // Direct Port I/O bypass to avoid spinlock deadlocks during syscall
+    unsafe {
+        let s = b"TUFF-RADICAL-SYSCALL: TRAP SUCCESS
+";
+        for &b in s {
+            while (crate::drivers::io::inb(0x3F8 + 5) & 0x20) == 0 {}
+            crate::drivers::io::outb(0x3F8, b);
+        }
+    }
 }

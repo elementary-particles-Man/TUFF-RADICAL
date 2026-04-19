@@ -22,7 +22,7 @@ use crate::drivers::virtio_blk::VirtioBlk;
 use core::{future::Future, pin::Pin, task::{Context, Poll}};
 use core::sync::atomic::Ordering;
 use crate::drivers::pci::{PciAddress, PciBar};
-use crate::arch::x86_64::{interrupts, cpu, gdt, apic, paging, syscall};
+use crate::arch::x86_64::{interrupts, cpu, gdt, apic, paging, syscall, user};
 use crate::mm::memory;
 use crate::compression::zram;
 
@@ -80,7 +80,17 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     gdt::init();
     interrupts::init_idt();
     unsafe { syscall::init(); }
-    let _apic_topology = apic::init(&runtime_table);
+    let apic_topology = apic::init(&runtime_table);
+    if let Some(topo) = apic_topology {
+        unsafe {
+            apic::disable_8259_pic();
+            if !topo.io_apics.is_empty() {
+                // Route Keyboard (IRQ 1) to Vector 33
+                apic::io_apic_set_redirection(topo.io_apics[0].address, 1, 33, 0);
+                serial_println!("TUFF-RADICAL-APIC: Keyboard IRQ 1 routed via I/O APIC.");
+            }
+        }
+    }
     interrupts::set_interrupt_timer_ready(apic::timer_routing_ready());
     zram::init();
 
@@ -89,6 +99,8 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // 1. Spawn base async initialization (PCIe, GPU, ZRAM) decoupled from the main thread
     executor.spawn(Task::new(async_pcie_probe_and_init()));
     executor.spawn(Task::new(async_runtime_diagnostics(features)));
+    // 1.5 Spawn User-mode Handoff sequence
+    executor.spawn(Task::new(async_user_handoff()));
 
     // 2. Spawn unlinked async worker modules dynamically scaled to CPU logical threads
     serial_println!(
@@ -209,4 +221,10 @@ unsafe fn read_pci_bar0(address: PciAddress) -> Option<u64> {
         PciBar::Memory32 { base, .. } | PciBar::Memory64 { base, .. } => Some(base),
         PciBar::Io { .. } => None,
     }
+}
+
+async fn async_user_handoff() {
+    serial_println!("TUFF-RADICAL-ASYNC [USER]: Initiating handoff to unprivileged space.");
+    SleepFuture::new(10).await; // Wait for system to stabilize
+    user::spawn_user_hello();
 }

@@ -138,3 +138,58 @@ impl Iterator for PciCapIterator {
         Some((cap_id, offset))
     }
 }
+
+#[allow(dead_code)]
+pub const CAP_ID_MSIX: u8 = 0x11;
+
+#[allow(dead_code)]
+pub struct MsixInfo {
+    pub offset: u8,
+    pub table_size: u16,
+    pub table_bir: u8,
+    pub table_offset: u32,
+}
+
+#[allow(dead_code)]
+pub unsafe fn configure_msix_vector(addr: PciAddress, info: &MsixInfo, vector_index: u16, cpu_id: u8, irq_vector: u8) {
+    // 1. Get Table base from BAR
+    let bar = read_bar(addr, info.table_bir).expect("MSI-X BAR not found");
+    let table_base = match bar {
+        PciBar::Memory32 { base, .. } | PciBar::Memory64 { base, .. } => base,
+        _ => panic!("MSI-X table must be in MMIO"),
+    };
+    
+    let entry_ptr = (table_base + info.table_offset as u64 + (vector_index as u64 * 16)) as *mut u32;
+    
+    // x86-64 MSI Message Address: 0xFEE00000 | (DestID << 12)
+    let addr_val = 0xFEE0_0000_u64 | ((cpu_id as u64) << 12);
+    // x86-64 MSI Message Data: (Trigger << 15) | (Level << 14) | (Delivery << 8) | Vector
+    let data_val = irq_vector as u32; 
+
+    core::ptr::write_volatile(entry_ptr, addr_val as u32);           // Msg Addr Low
+    core::ptr::write_volatile(entry_ptr.add(1), (addr_val >> 32) as u32); // Msg Addr High
+    core::ptr::write_volatile(entry_ptr.add(2), data_val);          // Msg Data
+    core::ptr::write_volatile(entry_ptr.add(3), 0);                 // Vector Control (0 = unmask)
+    
+    // Enable MSI-X in PCI config space
+    let mut ctrl = read_config_u16(addr, info.offset + 2);
+    ctrl |= 1 << 15; // Enable bit
+    write_config_u32(addr, info.offset, (ctrl as u32) << 16 | (read_config_u16(addr, info.offset) as u32));
+}
+
+#[allow(dead_code)]
+pub unsafe fn find_msix(addr: PciAddress) -> Option<MsixInfo> {
+    for (id, offset) in find_capabilities(addr) {
+        if id == CAP_ID_MSIX {
+            let ctrl = read_config_u16(addr, offset + 2);
+            let table_info = read_config_u32(addr, offset + 4);
+            return Some(MsixInfo {
+                offset,
+                table_size: (ctrl & 0x7FF) + 1,
+                table_bir: (table_info & 0x7) as u8,
+                table_offset: table_info & !0x7,
+            });
+        }
+    }
+    None
+}

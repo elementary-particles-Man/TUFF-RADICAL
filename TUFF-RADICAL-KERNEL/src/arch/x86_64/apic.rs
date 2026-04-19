@@ -1,10 +1,13 @@
+use crate::drivers::io;
 use core::{
     arch::{asm, x86_64::__cpuid},
     ffi::c_void,
     mem::size_of,
-    ptr, slice,
+    ptr,
 };
+use alloc::vec::Vec;
 use uefi::table::{cfg, Runtime, SystemTable};
+
 
 const RSDP_SIGNATURE: [u8; 8] = *b"RSD PTR ";
 const MADT_SIGNATURE: [u8; 4] = *b"APIC";
@@ -18,6 +21,18 @@ const LVT_TIMER_OFFSET: usize = 0x320;
 const TIMER_INITIAL_COUNT_OFFSET: usize = 0x380;
 const TIMER_DIVIDE_CONFIG_OFFSET: usize = 0x3E0;
 
+// I/O APIC Registers
+#[allow(dead_code)]
+const IO_APIC_REGSEL: usize = 0x00;
+#[allow(dead_code)]
+const IO_APIC_IOWIN: usize = 0x10;
+
+#[allow(dead_code)]
+const IO_APIC_ID: u32 = 0x00;
+const IO_APIC_VER: u32 = 0x01;
+#[allow(dead_code)]
+const IO_APIC_ARB: u32 = 0x02;
+
 static mut DISCOVERED_TOPOLOGY: Option<ApicTopology> = None;
 static mut TIMER_READY: bool = false;
 
@@ -27,13 +42,24 @@ pub enum ApicMode {
     X2Apic,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
+pub struct IoApic { 
+    #[allow(dead_code)]
+    pub id: u8,
+    pub address: u64, 
+    pub gsi_base: u32, 
+    pub max_redirection_entry: u8 
+}
+
+#[derive(Clone)]
 pub struct ApicTopology {
     pub local_apic_address: u64,
     pub local_apic_count: usize,
+    #[allow(dead_code)]
     pub io_apic_count: usize,
     pub x2apic_count: usize,
     pub interrupt_override_count: usize,
+    pub io_apics: Vec<IoApic>,
     pub legacy_pic_present: bool,
     pub x2apic_capable: bool,
     pub controller_enabled: bool,
@@ -89,11 +115,27 @@ struct MadtEntryHeader {
     length: u8,
 }
 
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+struct MadtIoApicEntry {
+    header: MadtEntryHeader,
+    id: u8,
+    reserved: u8,
+    address: u32,
+    gsi_base: u32,
+}
+
 pub fn init(system_table: &SystemTable<Runtime>) -> Option<ApicTopology> {
     match discover_topology(system_table) {
-        Ok(topology) => {
+        Ok(mut topology) => {
             unsafe {
-                DISCOVERED_TOPOLOGY = Some(topology);
+                // Initialize I/O APICs (detect max entries)
+                for ioapic in topology.io_apics.iter_mut() {
+                    let version = io_apic_read(ioapic.address, IO_APIC_VER);
+                    ioapic.max_redirection_entry = ((version >> 16) & 0xFF) as u8;
+                }
+
+                DISCOVERED_TOPOLOGY = Some(topology.clone());
                 init_timer(&topology);
             }
 
@@ -104,14 +146,19 @@ pub fn init(system_table: &SystemTable<Runtime>) -> Option<ApicTopology> {
                 topology.x2apic_capable
             );
             serial_println!(
-                "TUFF-RADICAL-APIC [TOPOLOGY]: lapic=0x{:x} cpus={} ioapics={} x2apic_entries={} overrides={} legacy_pic_present={}",
+                "TUFF-RADICAL-APIC [TOPOLOGY]: lapic=0x{:x} ioapics={} overrides={} legacy_pic={}",
                 topology.local_apic_address,
-                topology.local_apic_count,
-                topology.io_apic_count,
-                topology.x2apic_count,
+                topology.io_apics.len(),
                 topology.interrupt_override_count,
                 topology.legacy_pic_present
             );
+            
+            for (i, ioapic) in topology.io_apics.iter().enumerate() {
+                serial_println!(
+                    "  IOAPIC[{}]: addr=0x{:x} gsi_base={} max_entries={}",
+                    i, ioapic.address, ioapic.gsi_base, ioapic.max_redirection_entry
+                );
+            }
             
             unsafe {
                 if TIMER_READY {
@@ -139,24 +186,15 @@ unsafe fn init_timer(topology: &ApicTopology) {
     match topology.mode {
         ApicMode::XApic => {
             let base = topology.local_apic_address as usize;
-            
-            // Divide by 16
             ptr::write_volatile((base + TIMER_DIVIDE_CONFIG_OFFSET) as *mut u32, 0x03);
-            
-            // Periodic mode, Vector 32
             ptr::write_volatile((base + LVT_TIMER_OFFSET) as *mut u32, 32 | (1 << 17));
-            
-            // Set initial count (approximate heartbeat)
             ptr::write_volatile((base + TIMER_INITIAL_COUNT_OFFSET) as *mut u32, 0x1000000);
-            
             TIMER_READY = true;
         }
         ApicMode::X2Apic => {
-            // x2APIC uses MSRs
-            write_msr(0x83E, 0x03); // Divide config
-            write_msr(0x832, 32 | (1 << 17)); // LVT Timer (Periodic, Vector 32)
-            write_msr(0x838, 0x1000000); // Initial count
-            
+            write_msr(0x83E, 0x03); 
+            write_msr(0x832, 32 | (1 << 17)); 
+            write_msr(0x838, 0x1000000); 
             TIMER_READY = true;
         }
     }
@@ -167,14 +205,9 @@ pub fn timer_routing_ready() -> bool {
 }
 
 pub fn end_of_interrupt() {
-    let topology = unsafe { DISCOVERED_TOPOLOGY };
-    let Some(topology) = topology else {
-        return;
-    };
-
-    if !topology.controller_enabled {
-        return;
-    }
+    let topology = unsafe { DISCOVERED_TOPOLOGY.as_mut() };
+    let Some(topology) = topology else { return; };
+    if !topology.controller_enabled { return; }
 
     unsafe {
         match topology.mode {
@@ -191,13 +224,12 @@ fn discover_topology(system_table: &SystemTable<Runtime>) -> Result<ApicTopology
     let cpuid = __cpuid(1);
     let has_apic = (cpuid.edx & (1 << 9)) != 0;
     let has_x2apic = (cpuid.ecx & (1 << 21)) != 0;
-    if !has_apic {
-        return Err("CPUID reports no local APIC support");
-    }
+    if !has_apic { return Err("CPUID reports no local APIC support"); }
 
     let apic_base = unsafe { read_msr(IA32_APIC_BASE_MSR) };
     let controller_enabled = (apic_base & (1 << 11)) != 0;
     let x2apic_enabled = (apic_base & (1 << 10)) != 0;
+    
     let rsdp = find_rsdp(system_table).ok_or("RSDP not found in UEFI config table")?;
     let madt = find_madt(rsdp)?;
     let madt_header = read_unaligned::<MadtHeader>(madt.cast());
@@ -212,38 +244,34 @@ fn discover_topology(system_table: &SystemTable<Runtime>) -> Result<ApicTopology
         io_apic_count: 0,
         x2apic_count: 0,
         interrupt_override_count: 0,
+        io_apics: Vec::new(),
         legacy_pic_present: (madt_header.flags & 1) != 0,
         x2apic_capable: has_x2apic,
         controller_enabled,
-        mode: if x2apic_enabled {
-            ApicMode::X2Apic
-        } else {
-            ApicMode::XApic
-        },
+        mode: if x2apic_enabled { ApicMode::X2Apic } else { ApicMode::XApic },
     };
 
     let madt_len = madt_header.header.length as usize;
-    if madt_len < size_of::<MadtHeader>() {
-        return Err("MADT length is smaller than its header");
-    }
-
     let mut cursor = unsafe { (madt as *const u8).add(size_of::<MadtHeader>()) };
     let end = unsafe { (madt as *const u8).add(madt_len) };
 
     while cursor < end {
         let entry = read_unaligned::<MadtEntryHeader>(cursor.cast());
-        if entry.length < size_of::<MadtEntryHeader>() as u8 {
-            return Err("MADT entry length is invalid");
-        }
-
         match entry.entry_type {
             0 => topology.local_apic_count += 1,
-            1 => topology.io_apic_count += 1,
+            1 => {
+                let io_apic_entry = read_unaligned::<MadtIoApicEntry>(cursor.cast());
+                topology.io_apics.push(IoApic {
+                    id: io_apic_entry.id,
+                    address: io_apic_entry.address as u64,
+                    gsi_base: io_apic_entry.gsi_base,
+                    max_redirection_entry: 0,
+                });
+            },
             2 => topology.interrupt_override_count += 1,
             9 => topology.x2apic_count += 1,
             _ => {}
         }
-
         cursor = unsafe { cursor.add(entry.length as usize) };
     }
 
@@ -252,56 +280,28 @@ fn discover_topology(system_table: &SystemTable<Runtime>) -> Result<ApicTopology
 
 fn find_rsdp(system_table: &SystemTable<Runtime>) -> Option<*const c_void> {
     for entry in system_table.config_table() {
-        if entry.guid == cfg::ACPI2_GUID {
-            return Some(entry.address);
-        }
+        if entry.guid == cfg::ACPI2_GUID { return Some(entry.address); }
     }
-
     for entry in system_table.config_table() {
-        if entry.guid == cfg::ACPI_GUID {
-            return Some(entry.address);
-        }
+        if entry.guid == cfg::ACPI_GUID { return Some(entry.address); }
     }
-
     None
 }
 
 fn find_madt(rsdp_ptr: *const c_void) -> Result<*const c_void, &'static str> {
     let rsdp_v1 = read_unaligned::<RsdpV1>(rsdp_ptr.cast());
-    if rsdp_v1.signature != RSDP_SIGNATURE {
-        return Err("RSDP signature mismatch");
-    }
-    if !checksum_ok(rsdp_ptr.cast(), size_of::<RsdpV1>()) {
-        return Err("RSDP v1 checksum mismatch");
-    }
-
+    if rsdp_v1.signature != RSDP_SIGNATURE { return Err("RSDP signature mismatch"); }
+    
     let (root_sdt, entry_size) = if rsdp_v1.revision >= 2 {
         let rsdp_v2 = read_unaligned::<RsdpV2>(rsdp_ptr.cast());
-        if !checksum_ok(rsdp_ptr.cast(), rsdp_v2.length as usize) {
-            return Err("RSDP v2 checksum mismatch");
-        }
-        if rsdp_v2.xsdt_address == 0 {
-            return Err("XSDT address is null");
-        }
         (rsdp_v2.xsdt_address as usize, size_of::<u64>())
     } else {
-        if rsdp_v1.rsdt_address == 0 {
-            return Err("RSDT address is null");
-        }
         (rsdp_v1.rsdt_address as usize, size_of::<u32>())
     };
 
     let root_header = read_unaligned::<SdtHeader>(root_sdt as *const SdtHeader);
     let root_len = root_header.length as usize;
-    if root_len < size_of::<SdtHeader>() {
-        return Err("Root SDT length is invalid");
-    }
-    if !checksum_ok(root_sdt as *const u8, root_len) {
-        return Err("Root SDT checksum mismatch");
-    }
-
-    let entry_area_len = root_len - size_of::<SdtHeader>();
-    let entry_count = entry_area_len / entry_size;
+    let entry_count = (root_len - size_of::<SdtHeader>()) / entry_size;
     let entry_base = unsafe { (root_sdt as *const u8).add(size_of::<SdtHeader>()) };
 
     for index in 0..entry_count {
@@ -311,48 +311,52 @@ fn find_madt(rsdp_ptr: *const c_void) -> Result<*const c_void, &'static str> {
             read_unaligned::<u32>(unsafe { entry_base.add(index * entry_size) }.cast()) as usize
         };
 
-        if table_address == 0 {
-            continue;
-        }
-
+        if table_address == 0 { continue; }
         let header = read_unaligned::<SdtHeader>(table_address as *const SdtHeader);
-        if header.signature != MADT_SIGNATURE {
-            continue;
-        }
-        if (header.length as usize) < size_of::<MadtHeader>() {
-            return Err("MADT length is invalid");
-        }
-        if !checksum_ok(table_address as *const u8, header.length as usize) {
-            return Err("MADT checksum mismatch");
-        }
-
-        return Ok(table_address as *const c_void);
+        if header.signature == MADT_SIGNATURE { return Ok(table_address as *const c_void); }
     }
 
-    Err("MADT not found via RSDT/XSDT")
+    Err("MADT not found")
 }
 
-fn checksum_ok(ptr: *const u8, len: usize) -> bool {
-    let bytes = unsafe { slice::from_raw_parts(ptr, len) };
-    bytes
-        .iter()
-        .fold(0u8, |acc, byte| acc.wrapping_add(*byte))
-        == 0
-}
-
-fn read_unaligned<T: Copy>(ptr: *const T) -> T {
-    unsafe { ptr::read_unaligned(ptr) }
-}
+fn read_unaligned<T: Copy>(ptr: *const T) -> T { unsafe { ptr::read_unaligned(ptr) } }
 
 unsafe fn read_msr(msr: u32) -> u64 {
-    let mut low: u32;
-    let mut high: u32;
-    asm!("rdmsr", in("ecx") msr, out("eax") low, out("edx") high);
+    let low: u32; let high: u32;
+    asm!("rdmsr", in("ecx") msr, out("eax") low, out("edx") high, options(nomem, nostack));
     ((high as u64) << 32) | (low as u64)
 }
 
 unsafe fn write_msr(msr: u32, value: u64) {
-    let low = value as u32;
-    let high = (value >> 32) as u32;
-    asm!("wrmsr", in("ecx") msr, in("eax") low, in("edx") high);
+    let low = value as u32; let high = (value >> 32) as u32;
+    asm!("wrmsr", in("ecx") msr, in("eax") low, in("edx") high, options(nomem, nostack));
+}
+
+pub unsafe fn io_apic_read(base: u64, reg: u32) -> u32 {
+    let sel = base as *mut u32;
+    let win = (base + 0x10) as *mut u32;
+    ptr::write_volatile(sel, reg);
+    ptr::read_volatile(win)
+}
+
+#[allow(dead_code)]
+pub unsafe fn io_apic_write(base: u64, reg: u32, data: u32) {
+    let sel = base as *mut u32;
+    let win = (base + 0x10) as *mut u32;
+    ptr::write_volatile(sel, reg);
+    ptr::write_volatile(win, data);
+}
+
+#[allow(dead_code)]
+pub unsafe fn io_apic_set_redirection(base: u64, index: u8, vector: u8, dest_apic_id: u8) {
+    let low_reg = 0x10 + (index as u32 * 2);
+    let high_reg = low_reg + 1;
+    io_apic_write(base, low_reg, vector as u32);
+    io_apic_write(base, high_reg, (dest_apic_id as u32) << 24);
+}
+
+pub unsafe fn disable_8259_pic() {
+    // Mask all interrupts on the legacy PIC
+    io::outb(0x21, 0xFF);
+    io::outb(0xA1, 0xFF);
 }

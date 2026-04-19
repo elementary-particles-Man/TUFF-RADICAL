@@ -139,6 +139,13 @@ impl VirtioBlk {
             queue,
             request,
         };
+        
+        if let Some(msix) = pci::find_msix(pci_address) {
+            crate::serial_println!(
+                "TUFF-RADICAL-VIRTIO: MSI-X detected! TableSize={} BIR={} Offset=0x{:x}",
+                msix.table_size, msix.table_bir, msix.table_offset
+            );
+        }
 
         if !device.initialize_legacy_transport() {
             return None;

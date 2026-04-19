@@ -5,6 +5,7 @@ use uefi::table::boot::{MemoryType, PAGE_SIZE};
 /// ページテーブルのエントリ属性
 const PRESENT: u64 = 1 << 0;
 const WRITABLE: u64 = 1 << 1;
+pub const USER_ACCESSIBLE: u64 = 1 << 2;
 #[allow(dead_code)]
 const HUGE_PAGE: u64 = 1 << 7; 
 const NO_EXECUTE: u64 = 1 << 63;
@@ -100,7 +101,7 @@ unsafe fn map_page(pml4: *mut u64, virt: u64, phys: u64, flags: u64) {
             for i in 0..512 { *new_table.add(i) = 0; }
         }
         
-        *pd.add(pd_idx as usize) = new_table_phys | PRESENT | WRITABLE;
+        *pd.add(pd_idx as usize) = new_table_phys | PRESENT | WRITABLE | USER_ACCESSIBLE;
         new_table
     };
 
@@ -110,13 +111,29 @@ unsafe fn map_page(pml4: *mut u64, virt: u64, phys: u64, flags: u64) {
 unsafe fn get_or_create_table(parent: *mut u64, index: u64) -> *mut u64 {
     let entry = *parent.add(index as usize);
     if (entry & PRESENT) != 0 && (entry & HUGE_PAGE) == 0 {
+        // If already present, make sure USER bit is set if we want user accessibility.
+        // For simplicity, we enable USER bit on all intermediate tables.
+        // This is safe because the final leaf page still controls actual access.
+        *parent.add(index as usize) |= USER_ACCESSIBLE;
         (entry & !0xFFF & !0x8000_0000_0000_0000) as *mut u64
     } else {
         let new_table_phys = memory::allocate_page().expect("Failed to allocate table");
         let new_table = new_table_phys as *mut u64;
         for i in 0..512 { *new_table.add(i) = 0; }
-        // We don't support splitting huge pages at PML4/PDPT level here as they are unlikely.
-        *parent.add(index as usize) = new_table_phys | PRESENT | WRITABLE;
+        // Enable USER bit on the intermediate table link
+        *parent.add(index as usize) = new_table_phys | PRESENT | WRITABLE | USER_ACCESSIBLE;
         new_table
     }
+}
+
+
+pub unsafe fn map_user_code(virt: u64, phys: u64) {
+    let pml4 = Cr3::read() as *mut u64;
+    // Unset NO_EXECUTE
+    map_page(pml4, virt, phys, PRESENT | WRITABLE | USER_ACCESSIBLE);
+}
+
+pub unsafe fn map_user_data(virt: u64, phys: u64) {
+    let pml4 = Cr3::read() as *mut u64;
+    map_page(pml4, virt, phys, PRESENT | WRITABLE | USER_ACCESSIBLE | NO_EXECUTE);
 }
