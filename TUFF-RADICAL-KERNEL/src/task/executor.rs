@@ -1,3 +1,6 @@
+use core::sync::atomic::Ordering;
+use crate::task::telemetry::{GLOBAL_TELEMETRY, log_heartbeat};
+use crate::arch::x86_64::cpu::{self, SimdState};
 use crate::arch::x86_64::interrupts;
 use super::{Task, TaskId};
 use alloc::{collections::{BTreeMap, BTreeSet}, sync::Arc};
@@ -29,6 +32,7 @@ impl Executor {
             return;
         }
 
+        GLOBAL_TELEMETRY.tasks_spawned.fetch_add(1, Ordering::Relaxed);
         enqueue_task(&self.task_queue, &self.queued_tasks, task_id);
     }
 
@@ -51,13 +55,26 @@ impl Executor {
                 .entry(task_id)
                 .or_insert_with(|| TaskWaker::into_waker(task_id, task_queue.clone(), queued_tasks.clone()));
             let mut context = Context::from_waker(waker);
+            // TUFF-RADICAL: Surgical SIMD Context Guard
+            let simd_enabled = cpu::detect_features().simd_enabled;
+            if simd_enabled {
+                if task.simd_state.is_none() {
+                    task.simd_state = Some(alloc::boxed::Box::new(SimdState::new()));
+                }
+                unsafe { task.simd_state.as_ref().unwrap().restore(); }
+            }
+
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
                     tasks.remove(&task_id);
                     waker_cache.remove(&task_id);
                     dequeue_task(queued_tasks, task_id);
                 }
-                Poll::Pending => {}
+                Poll::Pending => {
+                    if simd_enabled {
+                        unsafe { task.simd_state.as_mut().unwrap().save(); }
+                    }
+                }
             }
         }
     }
@@ -65,6 +82,7 @@ impl Executor {
     pub fn run(&mut self) -> ! {
         loop {
             self.run_ready_tasks();
+            log_heartbeat(interrupts::current_tick());
             self.sleep_if_idle();
         }
     }

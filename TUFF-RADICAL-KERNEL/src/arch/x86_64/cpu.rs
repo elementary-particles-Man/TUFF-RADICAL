@@ -28,10 +28,21 @@ pub fn detect_features() -> CpuFeatures {
     let res1 = __cpuid(1);
     features.has_sse = (res1.edx & (1 << 25)) != 0;
     features.has_avx = (res1.ecx & (1 << 28)) != 0;
-    features.has_xsave = (res1.ecx & (1 << 26)) != 0;
-    features.has_osxsave = (res1.ecx & (1 << 27)) != 0;
+    features.has_xsave = (res1.ecx & (1 << 26)) != 0; // Hardware supports XSAVE
+    features.has_osxsave = (res1.ecx & (1 << 27)) != 0; // OS has enabled XSAVE
     features.has_rdrand = (res1.ecx & (1 << 30)) != 0;
     features.logical_threads = detect_logical_threads(max_leaf, res1.ebx);
+    
+    if features.has_osxsave {
+        unsafe {
+            features.xcr0 = xgetbv(0);
+            let res13 = __cpuid_count(0x0D, 0);
+            features.xsave_size = res13.ebx;
+            features.simd_enabled = true;
+            features.avx_enabled = (features.xcr0 & 0x4) != 0;
+            features.avx512_enabled = (features.xcr0 & 0xE0) == 0xE0;
+        }
+    }
     
     // XSAVE size detection (EAX=0Dh, ECX=0)
     if features.has_xsave {
@@ -53,13 +64,15 @@ pub fn detect_features() -> CpuFeatures {
 }
 
 pub unsafe fn init_simd() -> CpuFeatures {
-    let mut features = detect_features();
+    let mut features = detect_features(); // Preliminary detection
 
     match enable_simd_hardware(&mut features) {
         Ok(()) => {
+            // Re-detect features to confirm OSXSAVE and update flags
+            features = detect_features();
             serial_println!(
-                "TUFF-RADICAL [CPU-01]: SIMD runtime enabled (XCR0={:#x}).",
-                features.xcr0
+                "TUFF-RADICAL [CPU-01]: SIMD runtime enabled (XCR0={:#x}, XSAVE_SIZE={}).",
+                features.xcr0, features.xsave_size
             );
         }
         Err(err) => {
@@ -77,9 +90,7 @@ unsafe fn enable_simd_hardware(features: &mut CpuFeatures) -> Result<(), &'stati
     if !features.has_xsave {
         return Err("XSAVE not supported");
     }
-    if !features.has_osxsave {
-        return Err("OSXSAVE not supported");
-    }
+
 
     let mut cr0 = Cr0::read();
     let mut cr4 = Cr4::read();

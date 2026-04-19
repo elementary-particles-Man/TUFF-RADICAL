@@ -2,11 +2,13 @@ use core::{future::Future, pin::Pin};
 use alloc::boxed::Box;
 use core::task::{Context, Poll};
 use core::sync::atomic::{AtomicU64, Ordering};
+use crate::arch::x86_64::cpu::SimdState;
 
 pub mod executor;
+pub mod telemetry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct TaskId(u64);
+pub struct TaskId(u64);
 
 impl TaskId {
     fn new() -> Self {
@@ -16,8 +18,9 @@ impl TaskId {
 }
 
 pub struct Task {
-    id: TaskId,
+    pub id: TaskId,
     future: Pin<Box<dyn Future<Output = ()>>>,
+    pub simd_state: Option<Box<SimdState>>,
 }
 
 impl Task {
@@ -25,6 +28,7 @@ impl Task {
         Task {
             id: TaskId::new(),
             future: Box::pin(future),
+            simd_state: None, // Will be lazily allocated if executor supports it
         }
     }
 

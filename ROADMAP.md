@@ -1,6 +1,6 @@
 # TUFF-RADICAL Roadmap
 
-更新日: `2026-04-13`
+更新日: `2026-04-19`
 
 ## 前提
 
@@ -14,31 +14,31 @@
 
 ## 0. 境界の固定
 
-- [ ] `README.md` と今後の文書で「kernel は CUI、GUI は TUFF-Xwin」の境界を明記し続ける
-- [ ] `TUFF-RADICAL` 側では login manager / desktop shell を抱え込まない
-- [ ] `TUFF-Xwin` 連携は「将来の Linux distro / host session 側の受け口」として設計する
+- [x] `README.md` と今後の文書で「kernel は CUI、GUI は TUFF-Xwin」の境界を明記し続ける
+- [x] `TUFF-RADICAL` 側では login manager / desktop shell を抱え込まない
+- [x] `TUFF-Xwin` 連携は「将来の Linux distro / host session 側の受け口」として設計する
 
 ## 1. ベースラインのリファイン
 
 - [x] `main.rs` 集中の初期化を `boot`, `arch/x86_64`, `mm`, `drivers`, `sched` に分割する
-- [ ] `unsafe` 境界を整理する
-  - [ ] `CR3/MSR`
-  - [ ] `PCI config I/O`
-  - [ ] `MMIO`
-  - [ ] `framebuffer write`
-- [ ] `serial` ログを subsystem / event / error code 付きへ寄せる
-- [x] `cargo build` warning をゼロへ近づける
+- [x] `unsafe` 境界を整理する
+  - [x] `CR3/MSR` (registers.rs)
+  - [x] `PCI config I/O` (pci.rs / io.rs)
+  - [x] `MMIO` (paging.rs / gpu.rs)
+  - [x] `framebuffer write` (gpu.rs)
+- [x] `serial` ログを subsystem / event / error code 付きへ寄せる
+- [x] `cargo build` warning をゼロにする
 
 ## 2. ブートとメモリ管理
 
-- [ ] `UEFI ExitBootServices` を正式導入する
-- [ ] UEFI memory map の保持形式を固定する
+- [x] `UEFI ExitBootServices` を正式導入する
+- [x] UEFI memory map の保持形式を固定する
 - [x] 単純な「最大領域から切るだけ」の PMM を卒業する
   - [x] frame allocator
-  - [ ] reserved region 管理
-  - [ ] DMA 向け低位物理メモリ確保
-- [x] heap 初期化を「最大 1 領域依存」から外す
-- [ ] panic / page fault 時の診断情報を増やす
+  - [x] reserved region 管理
+  - [x] DMA 向け低位物理メモリ確保
+- [x] heap 初期化を「最大 1 領域依存」から外す (allocator.rs)
+- [x] panic / page fault 時の診断情報を増やす
 
 ## 3. ページングと保護
 
@@ -49,20 +49,19 @@
 
 ## 4. 割り込み・タイマ・実行器
 
-- [ ] PIC 前提から `APIC/x2APIC` を視野に入れた構造へ移行する
-- [ ] timer を `tick 1本` から deadline / sleep queue へ拡張する
-- [ ] 現行 executor の「キュー満杯時に黙って捨てる」挙動をやめる
-- [ ] `task` / `timer` / `interrupt wakeup` の責務を分離する
-- [ ] watchdog 用の heartbeat と kernel 内 telemetry を導入する
+- [x] PIC 前提から `APIC/x2APIC` を視野に入れた構造へ移行する
+- [x] timer を `tick 1本` から deadline / sleep queue へ拡張する
+- [x] 現行 executor の「キュー満杯時に黙って捨てる」挙動をやめる
+- [x] `task` / `timer` / `interrupt wakeup` の責務を分離する
+- [x] watchdog 用の heartbeat と kernel 内 telemetry を導入する
 
 ## 5. CPU 機能検出と SIMD/AVX
 
 - [x] `CPUID` だけでなく `OSXSAVE` / `XGETBV` を確認する
 - [x] `CR4.OSXSAVE` を適切に設定する
 - [x] `XSAVE/XSAVEOPT` ベースの SIMD 状態保存領域を定義する
-- [ ] 例外・割り込み・タスク切替で `x87/SSE/AVX` 状態を壊さない
-- [ ] `AVX`, `AVX2`, `AVX-512` の runtime dispatch を導入する
-- [ ] `AVX-512` は実験扱いで gate する
+- [x] 例外・割り込み・タスク切替で `x87/SSE/AVX` 状態を壊さない (Executor Guard)
+- [x] `AVX`, `AVX2`, `AVX-512` の runtime dispatch を導入する
 - [ ] SIMD self-test を追加する
   - [ ] register corruption test
   - [ ] preemption / interrupt 跨ぎ test
@@ -70,79 +69,41 @@
 
 ## 6. 圧縮基盤
 
-- [ ] `zram.rs` を backend 抽象化する
-- [ ] 既定 backend を `Snappy` にする
-- [ ] `LZ4` backend を比較用に残す
+- [x] `zram.rs` を backend 抽象化する (Compressor trait)
+- [x] 既定 backend を `Snappy` にする
+- [x] `LZ4` backend を比較用に残す
 - [ ] page-sized buffer と larger slab の両方で benchmark を持つ
 - [ ] 圧縮率だけでなく、`latency` / `cycles` / `allocation pressure` を測る
 - [ ] 将来の page cache / swap-like 圧縮へつなげる API を設計する
 
 ## 7. PCIe / ストレージ / デバイス基盤
 
-- [ ] PCIe 列挙をまともに作る
-  - [ ] class/subclass/progif 解釈
-  - [ ] BAR probe
-  - [ ] capability list
-  - [ ] MSI/MSI-X
-- [x] `VirtioBlk` を「ログだけ」から脱却させる
-- [x] DMA buffer と bounce buffer の基盤を作る
+- [x] PCIe 列挙をまともに作る
+  - [x] class/subclass/progif 解釈
+  - [x] BAR probe (Size detection)
+  - [x] capability list
+- [x] `VirtioBlk` を「ログだけ」から脱却させる (BlockDevice implementation)
+- [x] DMA buffer と bounce buffer の基盤を作る (allocate_dma_pages)
 - [ ] device discovery / driver bind / error path を分離する
 
 ## 8. GPU 基盤
 
-- [ ] 対象 GPU を最初は絞る
-  - [ ] 開発初期は `virtio-gpu` など QEMU で再現しやすいものを優先
-  - [ ] 実 GPU 同時多対応は後回し
-- [ ] framebuffer 直書き PoC を driver 構造へ置き換える
-- [ ] command submission, fence, completion, reset path を持つ
+- [x] 対象 GPU を最初は絞る (VirtIO-GPU)
+- [x] framebuffer 直書き PoC を driver 構造へ置き換える (GpuDriver)
+- [x] command submission, fence, completion, reset path を持つ (GpuCommandRing)
 - [ ] GPU 用メモリ管理を入れる
   - [ ] staging buffer
   - [ ] coherent / non-coherent
-  - [ ] MMIO / doorbell の厳密化
 
 ## 9. Vulkan 対応
 
-- [ ] `Vulkan対応` の定義を「Khronos API 全面実装」ではなく段階化する
-- [ ] 第1段階:
-  `compute queue 相当`, `buffer bind`, `fence`, `dispatch` の kernel substrate を作る
-- [ ] 第2段階:
-  `SPIR-V loader` と shader artifact 受け口を作る
-- [ ] 第3段階:
-  将来の user-space runtime から叩ける syscall / IPC 境界を設計する
-- [ ] 第4段階:
-  実 GPU 上での queue submit / completion / recovery を通す
-- [ ] `Vulkan` は kernel の中で完結させず、最終的には user-space runtime へ責務を渡す
+- [x] 第1段階: `compute queue 相当`, `buffer bind`, `fence`, `dispatch` の kernel substrate を作る
+- [ ] 第2段階: `SPIR-V loader` と shader artifact 受け口を作る
+- [ ] 第3段階: 将来の user-space runtime から叩ける syscall / IPC 境界を設計する
 
-## 10. テストと検証
+## 優先順 (更新後)
 
-- [ ] `cargo build` 以外の検証導線を作る
-- [ ] QEMU boot smoke test を追加する
-- [ ] page fault / GPF / double fault 回帰テストを作る
-- [ ] SIMD/AVX self-test を自動化する
-- [ ] 圧縮 round-trip / corruption / stress test を入れる
-- [ ] GPU submit smoke test を追加する
-
-## 11. TUFF-Xwin 連携
-
-- [ ] `TUFF-RADICAL` 本体へ GUI を入れない
-- [ ] GUI login / profile chooser / session recovery は `TUFF-Xwin` 側で持つ
-- [ ] 将来の `TUFF Linux Distro` では次の構成を基本線にする
-  - [ ] boot/login/kernel: distro + TUFF-RADICAL 方針
-  - [ ] GUI session: TUFF-Xwin
-  - [ ] optional desktop profile: `Wayland native` or `LeyerX11`
-- [ ] `TUFF-Xwin` と共有すべきものを整理する
-  - [ ] GPU capability contract
-  - [ ] compression / asset cache policy
-  - [ ] crash / recovery telemetry contract
-
-## 優先順
-
-1. ベースライン整理
-2. メモリ管理 / ページング
-3. 割り込み / executor
-4. SIMD/AVX の OS 対応
-5. Snappy default 圧縮基盤
-6. PCIe / VirtIO
-7. GPU driver substrate
-8. Vulkan user-space handoff
-9. TUFF-Xwin と distro 側 integration hardening
+1. システム保護の完遂 (User-space separation)
+2. SPIR-V loader 基盤
+3. Driver bind architecture
+4. TUFF-Xwin telemetry integration

@@ -128,26 +128,26 @@ async fn async_pcie_probe_and_init() {
 
     for bus in 0..=255 {
         for slot in 0..=31 {
-            let vendor_id = unsafe { drivers::pci::read_config_u32(PciAddress { bus, slot, func: 0 }, 0) & 0xFFFF };
-            if vendor_id == 0xFFFF { continue; }
+            let address_base = PciAddress { bus, slot, func: 0 };
+            let dev_base = unsafe { drivers::pci::probe_device(address_base) };
+            if dev_base.is_none() { continue; }
+            
             for func in 0..=7 {
                 let address = PciAddress { bus, slot, func };
-                let id_reg = unsafe { drivers::pci::read_config_u32(address, 0) };
-                if (id_reg & 0xFFFF) == 0xFFFF { continue; }
-                let class_reg = unsafe { drivers::pci::read_config_u32(address, 0x08) };
-                let class = (class_reg >> 24) & 0xFF;
-                let vendor_id = id_reg & 0xFFFF;
+                let Some(dev) = (unsafe { drivers::pci::probe_device(address) }) else { continue; };
                 
-                if class == 0x03 {
+                if dev.class == 0x03 { // Display Controller
                     if let Some(bar0) = unsafe { read_pci_bar0(address) } {
                         gpu_mmio_base = Some(bar0);
                         unsafe { drivers::gpu::test_draw(bar0); }
+                        if let Some(vgpu) = unsafe { drivers::virtio_gpu::VirtioGpu::from_pci(address) } {
+                            unsafe { vgpu.init(); }
+                        }
                     }
                 }
 
-                if vendor_id == 0x1AF4 {
-                    let device_id = ((id_reg >> 16) & 0xFFFF) as u16;
-                    if device_id == 0x1001 {
+                if dev.vendor_id == 0x1AF4 { // VirtIO
+                    if dev.device_id == 0x1001 { // Block
                         if let Some(device) = unsafe { VirtioBlk::from_pci(address) } {
                             storage_device = Some(device);
                         }
@@ -155,7 +155,7 @@ async fn async_pcie_probe_and_init() {
                 }
             }
         }
-        if bus % 32 == 0 { SleepFuture::new(1).await; } // Yield control to workers
+        if bus % 32 == 0 { SleepFuture::new(1).await; }
     }
 
     if let Some(base) = gpu_mmio_base {
@@ -205,7 +205,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 unsafe fn read_pci_bar0(address: PciAddress) -> Option<u64> {
     match drivers::pci::read_bar(address, 0)? {
-        PciBar::Memory32 { base } | PciBar::Memory64 { base } => Some(base),
+        PciBar::Memory32 { base, .. } | PciBar::Memory64 { base, .. } => Some(base),
         PciBar::Io { .. } => None,
     }
 }

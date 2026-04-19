@@ -116,7 +116,7 @@ impl VirtioBlk {
         }
 
         let io_base = match pci::read_bar(pci_address, 0)? {
-            PciBar::Io { base } => base,
+            PciBar::Io { base, .. } => base,
             _ => return None,
         };
 
