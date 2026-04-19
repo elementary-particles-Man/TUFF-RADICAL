@@ -5,7 +5,8 @@
 extern crate alloc;
 
 use core::arch::asm;
-use uefi::{allocator, prelude::*};
+use uefi::prelude::*;
+use uefi::allocator::exit_boot_services;
 
 mod memory;
 mod paging;
@@ -16,15 +17,21 @@ mod serial;
 mod gdt;
 mod interrupts;
 mod apic;
+mod pci;
+mod snappy;
 mod task;
 mod zram;
 mod virtio_blk;
+mod block;
+mod installer;
+mod allocator;
 
 use task::{Task, executor::Executor};
 use crate::gpu::GpuCommandRing;
 use crate::virtio_blk::VirtioBlk;
 use core::{future::Future, pin::Pin, task::{Context, Poll}};
 use core::sync::atomic::Ordering;
+use crate::pci::{PciAddress, PciBar};
 
 // --- 非同期スリープの実装 ---
 struct SleepFuture {
@@ -59,7 +66,7 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
 
     serial_println!("TUFF-RADICAL-KERNEL: Requesting UEFI ExitBootServices handoff...");
     let (runtime_table, mut memory_map) = system_table.exit_boot_services();
-    allocator::exit_boot_services();
+    exit_boot_services();
     x86_64::instructions::interrupts::disable();
     serial_println!("TUFF-RADICAL-KERNEL: ExitBootServices complete. Firmware boot services are offline.");
 
@@ -68,12 +75,12 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     memory::inspect_memory_map();
     unsafe { paging::init_paging(); }
     
-    // CPU Feature detection is required to determine the async scale topology
-    let features = cpu::detect_features();
+    // CPU feature detection also wires the runtime SIMD state.
+    let features = unsafe { cpu::init_simd() };
     cpu::log_features(&features);
     
-    if !features.has_avx {
-        serial_println!("TUFF-RADICAL-KERNEL: [WARNING] AVX missing. SIMD optimization degraded.");
+    if !features.avx_enabled {
+        serial_println!("TUFF-RADICAL-KERNEL: [WARNING] AVX runtime unavailable. SIMD optimization degraded.");
     }
 
     serial_println!("TUFF-RADICAL-KERNEL: Asserting absolute control over CPU (GDT/IDT)...");
@@ -87,10 +94,14 @@ fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     
     // 1. Spawn base async initialization (PCIe, GPU, ZRAM) decoupled from the main thread
     executor.spawn(Task::new(async_pcie_probe_and_init()));
+    executor.spawn(Task::new(async_runtime_diagnostics(features)));
 
     // 2. Spawn unlinked async worker modules dynamically scaled to CPU logical threads
-    serial_println!("TUFF-RADICAL-KERNEL: Spawning {} Unlinked Asynchronous Modules...", features.logical_threads);
-    for thread_id in 0..features.logical_threads {
+    serial_println!(
+        "TUFF-RADICAL-KERNEL: Spawning {} cooperative worker modules...",
+        features.recommended_workers
+    );
+    for thread_id in 0..features.recommended_workers {
         executor.spawn(Task::new(async_worker_module(thread_id)));
     }
 
@@ -124,23 +135,30 @@ async fn async_pcie_probe_and_init() {
 
     for bus in 0..=255 {
         for slot in 0..=31 {
-            let vendor_id = unsafe { read_pci_config(bus, slot, 0, 0) & 0xFFFF };
+            let vendor_id = unsafe { pci::read_config_u32(PciAddress { bus, slot, func: 0 }, 0) & 0xFFFF };
             if vendor_id == 0xFFFF { continue; }
             for func in 0..=7 {
-                let id_reg = unsafe { read_pci_config(bus, slot, func, 0) };
+                let address = PciAddress { bus, slot, func };
+                let id_reg = unsafe { pci::read_config_u32(address, 0) };
                 if (id_reg & 0xFFFF) == 0xFFFF { continue; }
-                let class_reg = unsafe { read_pci_config(bus, slot, func, 0x08) };
+                let class_reg = unsafe { pci::read_config_u32(address, 0x08) };
                 let class = (class_reg >> 24) & 0xFF;
+                let vendor_id = id_reg & 0xFFFF;
                 
                 if class == 0x03 {
-                    let bar0 = unsafe { read_pci_config(bus, slot, func, 0x10) };
-                    gpu_mmio_base = Some((bar0 as u64) & !0xF);
-                    unsafe { gpu::test_draw(gpu_mmio_base.unwrap()); }
+                    if let Some(bar0) = unsafe { read_pci_bar0(address) } {
+                        gpu_mmio_base = Some(bar0);
+                        unsafe { gpu::test_draw(bar0); }
+                    }
                 }
 
-                // VirtIO (QEMU Storage)
-                if (id_reg & 0xFFFF) == 0x1AF4 {
-                    storage_device = Some(VirtioBlk::new(id_reg as u64));
+                if vendor_id == 0x1AF4 {
+                    let device_id = ((id_reg >> 16) & 0xFFFF) as u16;
+                    if device_id == 0x1001 {
+                        if let Some(device) = unsafe { VirtioBlk::from_pci(address) } {
+                            storage_device = Some(device);
+                        }
+                    }
                 }
             }
         }
@@ -158,6 +176,18 @@ async fn async_pcie_probe_and_init() {
     }
 }
 
+async fn async_runtime_diagnostics(features: cpu::CpuFeatures) {
+    SleepFuture::new(5).await;
+    serial_println!(
+        "TUFF-RADICAL-ASYNC [CPU]: workers={} simd={} avx={} avx512={} xcr0={:#x}",
+        features.recommended_workers,
+        features.simd_enabled,
+        features.avx_enabled,
+        features.avx512_enabled,
+        features.xcr0
+    );
+}
+
 async fn async_gpu_compute_task(mut ring: GpuCommandRing) {
     serial_println!("TUFF-RADICAL-ASYNC [GPU]: Vulkan compute sequence isolated.");
     SleepFuture::new(10).await;
@@ -168,7 +198,7 @@ async fn async_gpu_compute_task(mut ring: GpuCommandRing) {
 async fn async_install_task(disk: VirtioBlk) {
     serial_println!("TUFF-RADICAL-ASYNC [INSTALL-TASK]: Beginning automated deployment...");
     SleepFuture::new(30).await; 
-    disk.perform_installation();
+    installer::run_install_pipeline(&disk);
     serial_println!("TUFF-RADICAL-ASYNC [INSTALL-TASK]: Deployment finalized. System ready.");
 }
 
@@ -180,10 +210,9 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop { unsafe { asm!("hlt"); } }
 }
 
-unsafe fn read_pci_config(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
-    let address = 0x80000000 | ((bus as u32) << 16) | ((slot as u32) << 11) | ((func as u32) << 8) | (offset as u32 & 0xFC);
-    asm!("out dx, eax", in("dx") 0xCF8_u16, in("eax") address);
-    let mut data: u32;
-    asm!("in eax, dx", out("eax") data, in("dx") 0xCFC_u16);
-    data
+unsafe fn read_pci_bar0(address: PciAddress) -> Option<u64> {
+    match pci::read_bar(address, 0)? {
+        PciBar::Memory32 { base } | PciBar::Memory64 { base } => Some(base),
+        PciBar::Io { .. } => None,
+    }
 }

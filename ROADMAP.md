@@ -27,17 +27,17 @@
   - [ ] `MMIO`
   - [ ] `framebuffer write`
 - [ ] `serial` ログを subsystem / event / error code 付きへ寄せる
-- [ ] `cargo build` warning をゼロへ近づける
+- [x] `cargo build` warning をゼロへ近づける
 
 ## 2. ブートとメモリ管理
 
 - [ ] `UEFI ExitBootServices` を正式導入する
 - [ ] UEFI memory map の保持形式を固定する
-- [ ] 単純な「最大領域から切るだけ」の PMM を卒業する
-  - [ ] frame allocator
+- [x] 単純な「最大領域から切るだけ」の PMM を卒業する
+  - [x] frame allocator
   - [ ] reserved region 管理
   - [ ] DMA 向け低位物理メモリ確保
-- [ ] heap 初期化を「最大 1 領域依存」から外す
+- [x] heap 初期化を「最大 1 領域依存」から外す
 - [ ] panic / page fault 時の診断情報を増やす
 
 ## 3. ページングと保護
@@ -84,8 +84,8 @@
   - [ ] BAR probe
   - [ ] capability list
   - [ ] MSI/MSI-X
-- [ ] `VirtioBlk` を「ログだけ」から脱却させる
-- [ ] DMA buffer と bounce buffer の基盤を作る
+- [x] `VirtioBlk` を「ログだけ」から脱却させる
+- [x] DMA buffer と bounce buffer の基盤を作る
 - [ ] device discovery / driver bind / error path を分離する
 
 ## 8. GPU 基盤

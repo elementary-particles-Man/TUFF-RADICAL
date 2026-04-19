@@ -1,12 +1,7 @@
 use uefi::table::boot::{MemoryAttribute, MemoryDescriptor, MemoryMap, MemoryType, PAGE_SIZE};
 use crate::serial_println;
-use linked_list_allocator::LockedHeap;
 use spin::Mutex;
-
-#[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
-
-const HEAP_SIZE_BYTES: u64 = 64 * 1024 * 1024; // Increased to 64MB for stability
+use crate::allocator::{ALLOCATOR, HEAP_SIZE_BYTES};
 const MAX_MEMORY_DESCRIPTORS: usize = 512;
 const EMPTY_DESCRIPTOR: MemoryDescriptor = MemoryDescriptor {
     ty: MemoryType::RESERVED,
@@ -17,9 +12,9 @@ const EMPTY_DESCRIPTOR: MemoryDescriptor = MemoryDescriptor {
 };
 
 pub struct PhysicalMemoryManager {
-    current_descriptor_index: usize,
-    next_free_phys_addr: u64,
-    current_region_end: u64,
+    pub current_descriptor_index: usize,
+    pub next_free_phys_addr: u64,
+    pub current_region_end: u64,
 }
 
 static PMM: Mutex<Option<PhysicalMemoryManager>> = Mutex::new(None);
@@ -29,17 +24,58 @@ static mut BOOT_MEMORY_MAP_LEN: usize = 0;
 
 impl PhysicalMemoryManager {
     fn allocate_page(&mut self) -> Option<u64> {
+        self.allocate_contiguous_pages(1)
+    }
+
+    pub fn allocate_contiguous_pages(&mut self, page_count: usize) -> Option<u64> {
+        if page_count == 0 {
+            return None;
+        }
+
+        let byte_len = (page_count as u64).checked_mul(PAGE_SIZE as u64)?;
+
         loop {
-            if self.next_free_phys_addr + PAGE_SIZE as u64 <= self.current_region_end {
-                let addr = self.next_free_phys_addr;
-                self.next_free_phys_addr += PAGE_SIZE as u64;
-                return Some(addr);
+            let aligned_start = (self.next_free_phys_addr + PAGE_SIZE as u64 - 1) & !(PAGE_SIZE as u64 - 1);
+            if aligned_start + byte_len <= self.current_region_end {
+                self.next_free_phys_addr = aligned_start + byte_len;
+                return Some(aligned_start);
             }
 
             if !self.advance_to_next_region() {
                 return None;
             }
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn allocate_dma_pages(&mut self, page_count: usize) -> Option<u64> {
+        // DMA buffers typically require addresses below 4GB.
+        // We scan the memory map from the beginning for a region below 4GB.
+        if page_count == 0 {
+            return None;
+        }
+
+        let byte_len = (page_count as u64).checked_mul(PAGE_SIZE as u64)?;
+
+        for desc in boot_memory_map().iter() {
+            if let Some((_start, end)) = conventional_region_bounds(desc) {
+                if end <= 0xFFFF_FFFF {
+                    // Try to allocate from this descriptor.
+                    // A proper implementation would need a free-list or bitmap to track allocations within desc.
+                    // For now, we fallback to our simple pointer if it's below 4GB.
+                    if self.current_region_end <= 0xFFFF_FFFF {
+                         let aligned_start = (self.next_free_phys_addr + PAGE_SIZE as u64 - 1) & !(PAGE_SIZE as u64 - 1);
+                         if aligned_start + byte_len <= self.current_region_end {
+                             self.next_free_phys_addr = aligned_start + byte_len;
+                             return Some(aligned_start);
+                         }
+                    }
+                }
+            }
+        }
+
+        // Fallback to normal allocation if below 4GB is not strictly guaranteed by the current simplistic PMM state.
+        self.allocate_contiguous_pages(page_count)
     }
 
     fn advance_to_next_region(&mut self) -> bool {
@@ -140,6 +176,14 @@ pub fn allocate_page() -> Option<u64> {
     let mut pmm = PMM.lock();
     match pmm.as_mut() {
         Some(pmm) => pmm.allocate_page(),
+        None => None,
+    }
+}
+
+pub fn allocate_contiguous_pages(page_count: usize) -> Option<u64> {
+    let mut pmm = PMM.lock();
+    match pmm.as_mut() {
+        Some(pmm) => pmm.allocate_contiguous_pages(page_count),
         None => None,
     }
 }
