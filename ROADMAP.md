@@ -20,7 +20,7 @@
 
 ## 1. ベースラインのリファイン
 
-- [ ] `main.rs` 集中の初期化を `boot`, `arch/x86_64`, `mm`, `drivers`, `sched` に分割する
+- [x] `main.rs` 集中の初期化を `boot`, `arch/x86_64`, `mm`, `drivers`, `sched` に分割する
 - [ ] `unsafe` 境界を整理する
   - [ ] `CR3/MSR`
   - [ ] `PCI config I/O`
@@ -42,9 +42,9 @@
 
 ## 3. ページングと保護
 
-- [ ] 4GB 全域 identity map をやめる
-- [ ] `text=RX`, `rodata=R`, `data/bss=RW`, `heap=RW/NX`, `MMIO=UC/NX` を分離する
-- [ ] `NX` を実際に policy として使う
+- [x] 4GB 全域 identity map をやめる
+- [x] `text=RX`, `rodata=R`, `data/bss=RW`, `heap=RW/NX`, `MMIO=UC/NX` を分離する
+- [x] `NX` を実際に policy として使う
 - [ ] 将来の user space 導入を見据え、kernel 空間と user 空間の分離準備を始める
 
 ## 4. 割り込み・タイマ・実行器
@@ -57,9 +57,9 @@
 
 ## 5. CPU 機能検出と SIMD/AVX
 
-- [ ] `CPUID` だけでなく `OSXSAVE` / `XGETBV` を確認する
-- [ ] `CR4.OSXSAVE` を適切に設定する
-- [ ] `XSAVE/XSAVEOPT` ベースの SIMD 状態保存領域を定義する
+- [x] `CPUID` だけでなく `OSXSAVE` / `XGETBV` を確認する
+- [x] `CR4.OSXSAVE` を適切に設定する
+- [x] `XSAVE/XSAVEOPT` ベースの SIMD 状態保存領域を定義する
 - [ ] 例外・割り込み・タスク切替で `x87/SSE/AVX` 状態を壊さない
 - [ ] `AVX`, `AVX2`, `AVX-512` の runtime dispatch を導入する
 - [ ] `AVX-512` は実験扱いで gate する

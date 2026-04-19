@@ -17,6 +17,7 @@ pub struct CpuFeatures {
     pub avx_enabled: bool,
     pub avx512_enabled: bool,
     pub xcr0: u64,
+    pub xsave_size: u32,
 }
 
 pub fn detect_features() -> CpuFeatures {
@@ -31,6 +32,12 @@ pub fn detect_features() -> CpuFeatures {
     features.has_osxsave = (res1.ecx & (1 << 27)) != 0;
     features.has_rdrand = (res1.ecx & (1 << 30)) != 0;
     features.logical_threads = detect_logical_threads(max_leaf, res1.ebx);
+    
+    // XSAVE size detection (EAX=0Dh, ECX=0)
+    if features.has_xsave {
+        let res13 = __cpuid_count(0x0D, 0);
+        features.xsave_size = res13.ebx; // Size required by currently enabled features in XCR0
+    }
 
     // Leaf 7, Subleaf 0: Extended features
     if max_leaf >= 7 {
@@ -161,3 +168,38 @@ fn topology_threads_from_leaf(leaf: u32) -> u32 {
 
 
 
+
+#[repr(C, align(64))]
+#[allow(dead_code)]
+pub struct SimdState {
+    pub buffer: [u8; 4096], // Max size for AVX-512 is around 2.5KB, 4KB is safe and aligned
+}
+
+impl SimdState {
+    #[allow(dead_code)]
+    pub const fn new() -> Self {
+        Self { buffer: [0u8; 4096] }
+    }
+
+    #[allow(dead_code)]
+    pub unsafe fn save(&mut self) {
+        core::arch::asm!(
+            "xsave [{}]",
+            in(reg) self.buffer.as_mut_ptr(),
+            in("eax") 0xFFFFFFFF_u32,
+            in("edx") 0xFFFFFFFF_u32,
+            options(nomem, nostack)
+        );
+    }
+
+    #[allow(dead_code)]
+    pub unsafe fn restore(&self) {
+        core::arch::asm!(
+            "xrstor [{}]",
+            in(reg) self.buffer.as_ptr(),
+            in("eax") 0xFFFFFFFF_u32,
+            in("edx") 0xFFFFFFFF_u32,
+            options(nomem, nostack)
+        );
+    }
+}
