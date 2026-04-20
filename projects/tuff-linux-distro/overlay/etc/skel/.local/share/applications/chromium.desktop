@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
 Name=Chromium
-Exec=/usr/bin/chromium %U
+Exec=/usr/bin/chromium --ozone-platform=wayland --enable-wayland-ime %U
 Terminal=false
 Icon=chromium
 Type=Application

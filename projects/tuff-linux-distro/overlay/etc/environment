@@ -1,13 +1,4 @@
 # TUFF-RADICAL Global Environment
-# NOTE: Removed hardcoded Intel driver overrides to ensure AMD/Hybrid compatibility.
-
-# Global hardware acceleration settings
-# Drivers are now handled by mesa-va-drivers / mesa-vdpau-drivers auto-selection.
-# Forcing Wayland for native apps
-QT_QPA_PLATFORM="wayland;xcb"
-GDK_BACKEND="wayland,x11"
-SDL_VIDEODRIVER="wayland"
-CLUTTER_BACKEND="wayland"
-
-# ZRAM management optimization
+# Keep GUI-scoped launch flags out of /etc/environment.
+# Browser and Wayland-specific settings live in the desktop launchers.
 ZRAM_ALGORITHM=zstd
